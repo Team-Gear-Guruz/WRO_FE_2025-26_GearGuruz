@@ -3,44 +3,16 @@ Electromechanical diagrams
 
 This schematic diagram was made using the help of the software Fritzing.
 
-This directory contains the electromechanical schematic of our WRO Future Engineers vehicle.
+This folder contains the electrical schematic of our WRO Future Engineers vehicle.
 
-🔧 Components Used
+🔧 Key Components
+Arduino Uno – Motor & servo control, ultrasonic sensors.
+Raspberry Pi – Vision + decision-making (camera + OpenCV).
+Motor Driver (L293/TB6612) – DC motor speed & direction.
+DC Motor & Servo – Drive + steering system.
+Ultrasonic Sensors (6x HC-SR04) – Distance sensing (front, back, sides, diagonals).
+Li-Po Battery (3.7V, 2200mAh) – Power source.
 
-Arduino Uno – main microcontroller for motor + servo + ultrasonic sensors.
-
-Raspberry Pi – vision & decision-making (camera + OpenCV).
-
-L293D / TB6612 Motor Driver – controls DC motor speed & direction.
-
-DC Motor – drives the vehicle forward/backward.
-
-Servo Motor – controls steering mechanism.
-
-Ultrasonic Sensors (HC-SR04) – 6 sensors for obstacle detection:
-
-Front, Back, Left, Right, Front-Left, Front-Right.
-
-Li-Po Battery (3.7V, 2200mAh) – powers Arduino and actuators.
-
-⚙️ Connections Overview
-
-DC Motor → Motor Driver → Arduino PWM pins.
-
-Servo Motor → Arduino Digital Pin D9.
-
-Ultrasonic Sensors → Arduino digital pins (Trig/Echo mapped individually).
-
-Arduino ↔ Raspberry Pi → Serial communication (USB/TTL).
-
-Battery → Supplies power to Arduino, motor driver, and sensors.
-
-🧩 System Flow
-
-Raspberry Pi processes camera feed → detects lanes, pillars, parking.
-
-Pi sends motor/servo commands (M <int>, SUS <int>, STOP) via Serial.
-
-Arduino executes commands → controls DC motor + servo.
-
-Ultrasonic sensors provide distance feedback for obstacle detection & safety.
+⚙️ Signal Flow
+Camera → Raspberry Pi (Vision + FSM) → Serial → Arduino → Motors & Servo
+  ↳ Ultrasonic sensors → Arduino (safety & obstacle detection)
