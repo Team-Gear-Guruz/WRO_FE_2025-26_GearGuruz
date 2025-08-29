@@ -5,22 +5,31 @@ This repository contains engineering materials of a self-driven vehicle's model 
 
 ## Content
 
-* `t-photos` contains 2 photos of the team (an official one and one funny photo with all team members)
-* `v-photos` contains 6 photos of the vehicle (from every side, from top and bottom)
-* `video` contains the video.md file with the link to a video where driving demonstration exists
-* `schemes` contains one or several schematic diagrams in form of JPEG, PNG or PDF of the electromechanical components illustrating all the elements (electronic components and motors) used in the vehicle and how they connect to each other.
-* `src` contains code of control software for all components which were programmed to participate in the competition
-* `models` is for the files for models used by 3D printers, laser cutting machines and CNC machines to produce the vehicle elements. If there is nothing to add to this location, the directory can be removed.
-* `other` is for other files which can be used to understand how to prepare the vehicle for the competition. It may include documentation how to connect to a SBC/SBM and upload files there, datasets, hardware specifications, communication protocols descriptions etc. If there is nothing to add to this location, the directory can be removed.
+* `t-photos` Team photos (includes one official group photo and one funny team photo).
+* `v-photos` Vehicle photos (6 angles: front, back, sides, top, bottom).
+* `video` contains a link to our driving demonstration video
+* `schemes` Schematic diagrams of the electromechanical system (motors, sensors, controllers, wiring).
+* `src` Source code for the vehicle:
+* 
+        Python (Raspberry Pi) → Vision, lane following, obstacle avoidance, parking logic.
+        Arduino → Motor + servo bridge (serial protocol for PWM and steering).
+* `models` 3D printing, laser cutting, and CNC files for chassis and mechanical components.
+* `other` Documentation, datasets, hardware specs, and supporting materials for preparing the vehicle.
 
 ## Introduction
 
-_This part must be filled by participants with the technical clarifications about the code: which modules the code consists of, how they are related to the electromechanical components of the vehicle, and what is the process to build/compile/upload the code to the vehicle’s controllers._
+Our vehicle is driven by a Raspberry Pi (vision and AI brain) and an Arduino (motor + servo controller).
 
-## How to prepare the repo based on the template
+The Raspberry Pi runs Python code for perception (lane detection, obstacle recognition, parking detection) and decision-making (PD control, lap tracking, state machines).
 
-_Remove this section before the first commit to the repository_
+The Arduino receives high-level commands (motor PWM, steering servo microseconds) over serial and translates them into signals for the motor driver (L293/TB6612) and the steering servo.
 
-1. Clone this repo by using the `git clone` functionality.
-2. Remove `.git` directory
-3. [Initialize a new public repository on GitHub](https://github.com/new) by following instructions from "create a new repository on the command line" section (appeared after pressing "Create repository" button).
+The workflow:
+
+Raspberry Pi captures camera feed → processes lane + obstacle data.
+
+Control logic generates steering and throttle signals.
+
+Arduino executes commands → drives motors and steering servo.
+
+This integration allowed the vehicle to complete laps, handle obstacles, turn around when needed, and finish with vision-guided parking.
