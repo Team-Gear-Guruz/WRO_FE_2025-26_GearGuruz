@@ -2,6 +2,7 @@ Electromechanical diagrams
 ====
 
 This schematic diagram was made using the help of the software Fritzing.
+
 This directory contains the electromechanical schematic of our WRO Future Engineers vehicle.
 
 🔧 Components Used
