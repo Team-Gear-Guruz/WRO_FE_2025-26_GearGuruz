@@ -55,7 +55,8 @@ Kushal Khemani, age 16, kushal.khemani@gmail.com
 
 ## Team Photos
 
-![Team Photo](t-photos/OfficialPicture.jpeg)
+![Team Photo](t-photos/Official Picture.jpeg)
+![Team Photo](t-photos/Funny Picture.png)
 
 
 ##  Quick Overview
