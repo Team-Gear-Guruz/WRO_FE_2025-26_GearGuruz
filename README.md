@@ -16,18 +16,19 @@ This repository contains engineering materials of a self-driven vehicle's model 
 * `models` 3D printing, laser cutting, and CNC files for chassis and mechanical components.
 * `other` Documentation, datasets, hardware specs, and supporting materials for preparing the vehicle.
 
-##  Content of Repository
+## 📂 Content of Repository
 
-| Folder     |                                      Description                                                                           |
-|------------|---------------------------------------------------------------------------------------|
-| `models/`  | 3D-printable mechanical parts (sensor mounts, chassis, etc.)                          |
-| `schemes/` | Electrical schematics and wiring diagrams                                             |
-| `src/`     | Python (Raspberry Pi) → Vision, lane following, obstacle avoidance, parking logic.
-               Arduino → Motor + servo bridge (serial protocol for PWM and steering).                |
-| `t-photos/`| Team photos                                                                           |
-| `v-photos/`| Vehicle photos from multiple views                                                    |
-| `video/`   | Driving demo link or video files                                                      |
-| `other/`   | Documentation, data, setups, manuals                                                  |
+| Folder     | Description |
+|------------|-------------|
+| `models/`  | 3D-printable mechanical parts (sensor mounts, chassis, etc.) |
+| `schemes/` | Electrical schematics and wiring diagrams |
+| `src/`     | Python (Raspberry Pi) → Vision, lane following, obstacle avoidance, parking logic.<br>Arduino → Motor + servo bridge (serial protocol for PWM + steering). |
+| `t-photos/`| Team photos (includes one official group photo and one funny team photo) |
+| `v-photos/`| Vehicle photos (6 angles: front, back, sides, top, bottom) |
+| `video/`   | Driving demo link or video files |
+| `other/`   | Documentation, datasets, hardware specs, and supporting materials |
+
+---
 
 ##  Parts List
 
