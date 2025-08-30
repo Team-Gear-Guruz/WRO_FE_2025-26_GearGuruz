@@ -16,11 +16,50 @@ This repository contains engineering materials of a self-driven vehicle's model 
 * `models` 3D printing, laser cutting, and CNC files for chassis and mechanical components.
 * `other` Documentation, datasets, hardware specs, and supporting materials for preparing the vehicle.
 
+##  Content of Repository
+
+| Folder     |                                      Description                                                                           |
+|------------|---------------------------------------------------------------------------------------|
+| `models/`  | 3D-printable mechanical parts (sensor mounts, chassis, etc.)                          |
+| `schemes/` | Electrical schematics and wiring diagrams                                             |
+| `src/`     | Python (Raspberry Pi) → Vision, lane following, obstacle avoidance, parking logic.
+               Arduino → Motor + servo bridge (serial protocol for PWM and steering).                |
+| `t-photos/`| Team photos                                                                           |
+| `v-photos/`| Vehicle photos from multiple views                                                    |
+| `video/`   | Driving demo link or video files                                                      |
+| `other/`   | Documentation, data, setups, manuals                                                  |
+
+##  Parts List
+
+| Component                | Quantity | Description / Role                                     |
+|--------------------------|----------|--------------------------------------------------------|
+| Raspberry Pi 4 (or 3B+)  | 1        | Main controller, runs Python + OpenCV vision + logic   |
+| Arduino Uno              | 1        | Low-level controller for motor + steering (PWM + servo)|
+| L293D / TB6612 Driver    | 1        | Motor driver IC for DC motor control                   |
+| DC Gear Motor            | 1        | Rear wheel drive motor                                 |
+| Servo Motor (SG90/MG90S) | 1        | Steering actuator (mounted on front axle)              |
+| HC-SR04 Ultrasonic Sensor| 6        | Obstacle detection (front, back, left, right, FL, FR)  |
+| Li-Po Battery (3.7V 2000mAh)| 1     | Power source for electronics and motors                |
+| Motor Mounts / Chassis   | 1 set    | 3D-printed chassis parts + mounts                      |
+| Wheels + Tires           | 2–4      | Drive + steering wheels                                |
+| Wires, Jumper cables     | —        | Connections between Pi, Arduino, sensors, and driver   |
+| Breadboard / PCB         | 1        | For stable wiring and connections                      |
+| Camera (Pi Camera / USB) | 1        | Used by Raspberry Pi for lane + obstacle detection     |
+
 ## Team members
 
 Ayan Atmakuri, age 16, atmakuriayan@gmail.com 
 
 Kushal Khemani, age 16, kushal.khemani@gmail.com
+
+##  Quick Overview
+
+A vision-guided mini-vehicle using:
+
+- **Raspberry Pi**: Computer vision (OpenCV), control logic (PD + FSM)  
+- **Arduino Uno**: Motor and servo actuation, obstacle feedback  
+- **Simple Serial Protocol**: Commands like `M <int>`, `SUS <us>`, `STOP`, `PING`  
+- **Features**: Lane following, obstacle avoidance, auto-parking, HSV tuning, simulator.
 
 ## Introduction
 
