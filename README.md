@@ -53,6 +53,9 @@ Ayan Atmakuri, age 16, atmakuriayan@gmail.com
 
 Kushal Khemani, age 16, kushal.khemani@gmail.com
 
+## Team Photos
+
+
 ##  Quick Overview
 
 A vision-guided mini-vehicle using:
