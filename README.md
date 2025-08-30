@@ -1,3 +1,26 @@
+# 🤖 WRO Future Engineers – Raspberry Pi + Arduino Robot
+
+[![Python](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/)
+[![OpenCV](https://img.shields.io/badge/OpenCV-vision-green.svg)](https://opencv.org/)
+[![Arduino](https://img.shields.io/badge/Arduino-UNO-00979D.svg)](https://www.arduino.cc/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
+<img src="t-photos/hero.jpg" alt="Robot demo" width="850"/>
+
+A vision-guided mini-car for **WRO Future Engineers**. Raspberry Pi handles **OpenCV + control (PD + FSM)**; Arduino drives **motor + steering servo** over a simple serial protocol.
+
+---
+
+## 🚀 Quick Start
+```bash
+# Raspberry Pi
+cd src
+python3 wro.py sim                # simulator
+python3 wro.py hsv_tuner          # tune colours
+python3 wro.py cam --dry-run      # vision only
+python3 wro.py cam --port /dev/ttyACM0 --baud 115200  # with Arduino
+
+
 Engineering materials
 ====
 
