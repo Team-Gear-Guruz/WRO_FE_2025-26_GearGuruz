@@ -16,7 +16,7 @@ This repository contains engineering materials of a self-driven vehicle's model 
 * `models` 3D printing, laser cutting, and CNC files for chassis and mechanical components.
 * `other` Documentation, datasets, hardware specs, and supporting materials for preparing the vehicle.
 
-## 📂 Content of Repository
+## Content of Repository
 
 | Folder     | Description |
 |------------|-------------|
@@ -79,3 +79,12 @@ Control logic generates steering and throttle signals.
 Arduino executes commands → drives motors and steering servo.
 
 This integration allowed the vehicle to complete laps, handle obstacles, turn around when needed, and finish with vision-guided parking.
+
+##  Running the System
+
+```bash
+cd src/
+python3 wro.py sim                      # Run in simulator
+python3 wro.py hsv_tuner                # Adjust HSV thresholds
+python3 wro.py cam --dry-run            # Camera mode without motors
+python3 wro.py cam --port /dev/ttyACM0 --baud 115200  # Full deployment with Arduino
