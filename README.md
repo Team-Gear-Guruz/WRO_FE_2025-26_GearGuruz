@@ -130,10 +130,10 @@ The design leverages a **Raspberry Pi** for high-level perception and decision-m
 | Sensor                | TRIG (Digital) | ECHO (Analog) |
 |------------------------|----------------|----------------|
 | Front-Center (FC)      | `D2`           | `A0`           |
-| Front-Left Diagonal    | `D7`           | `A1`           |
-| Front-Right Diagonal   | `D8`           | `A2`           |
-| Left (L)               | `D10`          | `A3`           |
-| Right (R)              | `D12`          | `A4`           |
+| Front-Left Diagonal    | `D3`           | `A1`           |
+| Front-Right Diagonal   | `D5`           | `A2`           |
+| Left (L)               | `D6`          | `A3`           |
+| Right (R)              | `D10`          | `A4`           |
 | Back (B)               | `D13`          | `A5`           |
 
 
