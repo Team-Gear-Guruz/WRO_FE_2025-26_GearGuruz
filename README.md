@@ -57,6 +57,8 @@ Kushal Khemani, age 16, kushal.khemani@gmail.com
 
 <img src="https://github.com/ayan-atm/WRO_FE_2025-26/raw/main/t-photos/Official%20Picture.jpeg" width="40%" height="40%"> <img src="https://github.com/ayan-atm/WRO_FE_2025-26/raw/main/t-photos/Funny%20Picture.png" width="40%" height="40%">
 
+Ayan Atmakuri (Purple shirt), Kushal Khemani (Grey and green shirt)
+
 ##  Quick Overview
 
 A vision-guided mini-vehicle using:
