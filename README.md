@@ -1,7 +1,6 @@
 Engineering materials
 ====
 
-## Team Banner
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/ayan-atm/WRO_FE_2025-26/main/other/TeamBanner.png" alt="Team Banner" width="900"/>
