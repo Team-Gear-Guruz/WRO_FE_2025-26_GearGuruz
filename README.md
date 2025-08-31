@@ -108,8 +108,263 @@ The design leverages a **Raspberry Pi** for high-level perception and decision-m
 4. **Real World Performance**  
    - Car autonomously navigates laps, avoids obstacles, obeys color-based passing rules, executes turnarounds, and completes vision-guided parallel parking.
 
+Thanks! Here's the updated **Mobility Management** section tailored to your actual hardware:
 
-## 📌 Arduino Pin Mapping for Self-Driving Car (WRO 2025)
+---
+
+## 1. Mobility Management
+
+Our vehicle’s mobility system has been engineered for robust, stable navigation across both Open and Obstacle Challenges in WRO 2025. The setup balances power, control precision, and sensor integration using reliable, competition-grade components.
+
+### Motor Selection and Implementation
+
+We selected a **12V DC gear motor rated at 300 RPM** for propulsion. The decision was based on:
+
+* **High torque output**, necessary for low-speed maneuvers and quick directional changes
+* Sufficient RPM to maintain speed while tracking lines or navigating walls
+* Compatibility with the **L293D motor driver shield**, which allows:
+
+  * PWM-based speed control via **digital pin D11**
+  * Direction control via built-in 74HC595 shift register (internal use of D4, D7, D8, D12)
+
+Only **Motor M1** on the shield is used, simplifying wiring and reducing interference with ultrasonic TRIG/ECHO pins.
+
+### Steering Mechanism
+
+Steering is handled by an **MG996R high-torque servo motor**, chosen for its:
+
+* **Superior torque (up to 10kg.cm)**, ideal for precise control of front-wheel pivot steering
+* Robust metal gears suitable for extended use and minor shocks
+* Faster response time compared to standard 9g hobby servos
+
+The servo is powered via a **dedicated buck converter set at 5V**, ensuring:
+
+* Stable power supply without drawing current from the Arduino
+* Protection against brownout during high-load movements
+
+The servo signal is connected to **digital pin D9** and is controlled via the `Servo.h` library.
+
+### Chassis and Component Mounting
+
+The chassis is a **custom design** with cutouts and supports for:
+
+* Arduino Uno + L293D Shield (stacked)
+* Servo motor mounted at the front axle for steering
+* Power bank or Li-ion battery for 12V supply
+* Buck converter securely fixed for servo
+* Ultrasonic sensors (6x) around the perimeter
+
+The mounting design ensures:
+
+* **Center of gravity remains low**, aiding stability
+* **Balanced front-rear weight** to avoid drift or oversteer
+* **Mechanical isolation** for sensor mounts to avoid vibration interference
+
+### Engineering Principles Applied
+
+* **Torque over speed**: The 300 RPM motor offers sufficient torque for all obstacle scenarios and allows smooth lap completion.
+* **Proportional control via PWM** for both speed and steering adjustments.
+* **Power isolation**: Servo draws from a separate buck, preventing logic voltage drops on Arduino.
+
+Failsafe routines in the software monitor obstacle proximity. If all sensor readings drop below safe limits, the car **automatically reverses and adjusts angle** to prevent collision or deadlock.
+
+
+## 2. Power and Sense Management
+
+To enable robust autonomous operation across both the Open and Obstacle Challenges, our power and sensing systems were designed to be modular, efficient, and fail-safe. Key design goals included isolating high-power and logic domains, ensuring consistent voltage supply for sensitive components, and providing wide-angle situational awareness through sensor fusion.
+
+---
+
+### Power Management
+
+#### Power Source:
+
+The entire vehicle is powered by a **12V Li-ion battery**, chosen for its:
+
+* High energy density
+* Lightweight form factor
+* Rechargeability
+* Ability to sustain current surges required by motors and electronics
+
+The battery feeds both high-power components and regulated subsystems via a **step-down (buck) converter**.
+
+#### Voltage Regulation:
+
+* **DC Motor (12V)**: Powered directly from the battery through an L293D motor shield.
+* **Servo Motor (MG996R, 5V)**: Powered via a dedicated buck converter to ensure stable current and prevent voltage dips under load.
+* **Arduino Uno & Logic Circuits**: Supplied via the 5V rail, either from USB or regulated output from the buck.
+* **Raspberry Pi** (Obstacle Challenge): Powered separately or through a second buck converter, ensuring isolation from motor spikes.
+
+This separation of power rails helps avoid brownouts, particularly during servo actuation or rapid motor speed changes. A common ground is maintained to ensure reliable sensor readings.
+
+#### Safety Features:
+
+* On/off switch to isolate the main supply
+* Fuse protection inline with the Li-ion output
+* Reverse polarity and surge protection via onboard diode
+
+
+###  Sense Management
+
+#### Sensor System:
+
+The vehicle uses **six ultrasonic distance sensors (HC-SR04)** strategically positioned to cover:
+
+* Forward path detection
+* Side wall following and obstacle clearance
+* Rear proximity awareness
+
+These sensors were selected based on:
+
+* Proven reliability and accuracy (2–400 cm range)
+* Low cost and easy integration with Arduino
+* Minimal power consumption (\~15 mA per sensor)
+
+#### Sensor Strategy:
+
+* **Open Challenge**: The sensors guide wall-following behavior and lap-count detection using distance thresholds and orientation cues.
+* **Obstacle Challenge**: The sensors serve as secondary proximity detection, while the **Raspberry Pi + camera** handles traffic signs, colored zones, and advanced navigation through computer vision.
+
+#### Power Consumption Considerations:
+
+All sensors operate on 5V logic. Since each sensor draws minimal current, they are powered directly from the Arduino 5V output. The servo's power-hungry nature warranted a dedicated 5V supply via buck converter to avoid interference.
+
+
+## 3. Obstacle Management
+
+Obstacle management in our self-driving vehicle focuses on real-time detection, decision-making, and recovery strategies to navigate both static and dynamic obstacles with minimal latency and high reliability.
+
+We use a **hybrid approach**:
+
+* **Ultrasonic sensors (Arduino-controlled)** for reactive proximity-based obstacle avoidance
+* **Camera + Raspberry Pi (OpenCV)** for computer vision tasks such as detecting stop signs, colored zones, and “No Entry” paths
+
+---
+
+### Strategy Overview
+
+#### **Open Challenge (Arduino-only):**
+
+* Use ultrasonic sensors to detect walls and gaps
+* Follow the left wall to maintain direction
+* Avoid close-range collisions using threshold values
+* Perform a lap-count using sensor fusion
+* Maintain consistent motion unless a fail-safe triggers
+
+#### **Obstacle Challenge (Raspberry Pi + Arduino):**
+
+* Raspberry Pi processes camera input for traffic sign recognition
+* On detecting a STOP sign, Pi sends a signal to Arduino to pause
+* If a colored zone or arrow sign is detected, Pi sends directional decisions
+* Arduino reacts with real-time motor and steering commands
+* Failsafes include “no echo” situations, timeout recovery, and realignment
+
+---
+
+### Flow Diagram
+
+```
+[Start]
+   |
+   v
+[Sensor Calibration]
+   |
+   v
+[Wall Following Enabled] ←-------------------------\
+   |                                              |
+   v                                              |
+[Obstacle Detected?] --Yes--> [Decision: Stop/Turn/Slow]
+   |                                              |
+  No                                              v
+   |                                  [Resume Wall Following]
+   v                                              |
+[Zone Entry Detected?] --Yes--> [Trigger Zone Handling Logic]
+   |                                              |
+  No                                              v
+   |                                  [Lap Count or Finish?]
+   v                                              |
+[Continue Movement] -----------------------------/
+```
+
+---
+
+### Pseudocode (Obstacle Challenge)
+
+```plaintext
+Start
+→ Initialize Arduino and Pi communication
+→ Start camera stream and ultrasonic sensors
+→ While lap count < 3:
+    - Use ultrasonic sensors for wall following
+    - If front obstacle distance < 15 cm:
+        - Stop or steer away
+    - If Pi detects STOP sign:
+        - Pause 3 seconds
+    - If Pi detects “turn right”:
+        - Send servo signal to turn
+    - If Pi detects color zone:
+        - Change speed / behavior
+→ After 3 laps, stop car
+```
+
+---
+
+### Arduino Code Snippet (Obstacle Handling Logic)
+
+// Inside loop()
+
+```cpp
+long distFC = readDistance(TRIG_FC, ECHO_FC);
+long distL = readDistance(TRIG_L, ECHO_L);
+long distR = readDistance(TRIG_R, ECHO_R);
+
+// Wall following logic
+if (distL < 15) {
+  turnRight();
+} else if (distL > 30) {
+  turnLeft();
+} else {
+  goStraight();
+}
+
+// Obstacle ahead
+if (distFC < 12) {
+  stopCar();
+  delay(800);
+  turnRight();  // Basic evasive action
+  delay(400);
+}
+```
+
+---
+
+### Raspberry Pi Role (Computer Vision)
+
+The Pi runs OpenCV-based code to:
+
+* Detect red STOP signs
+* Recognize arrows for directional instructions
+* Identify colored zones (blue, yellow, red) using HSV masks
+
+After classification, the Pi sends command signals to Arduino via serial:
+
+* `"STOP"`, `"LEFT"`, `"RIGHT"`, `"ZONE_RED"`, etc.
+
+The Arduino interprets these and adjusts movement accordingly.
+
+---
+
+### Failsafe Mechanisms
+
+* **No echo recovery**: If no echo is received from a sensor for more than 3 reads, the car slows down and centers.
+* **Stuck detection**: If the car hasn't moved in distance (based on rear sensors), it reverses for 1 second and retries.
+* **Soft timeout**: If a lap takes longer than 2 minutes, the system logs an alert.
+
+
+
+
+
+## Arduino Pin Mapping for Self-Driving Car (WRO 2025)
 
 ### 🔧 Motor (M1 via L293D Shield)
 - **Speed (PWM):** `D11`  
@@ -118,26 +373,17 @@ The design leverages a **Raspberry Pi** for high-level perception and decision-m
 
 ---
 
-### 🎯 Servo Motor
+### Servo Motor
 - **Signal Pin:** `D9`
 
 ---
 
-### 📡 Ultrasonic Sensors (6 Total)
+### Ultrasonic Sensors (6 Total)
 > Echo lines are placed on analog pins `A0–A5` for cleaner signal and to free digital pins.  
 > Trigger lines are assigned to available digital pins.
 
-| Sensor                | TRIG (Digital) | ECHO (Analog) |
-|------------------------|----------------|----------------|
-| Front-Center (FC)      | `D2`           | `A0`           |
-| Front-Left Diagonal    | `D3`           | `A1`           |
-| Front-Right Diagonal   | `D5`           | `A2`           |
-| Left (L)               | `D6`          | `A3`           |
-| Right (R)              | `D10`          | `A4`           |
-| Back (B)               | `D13`          | `A5`           |
 
-
-## Unit Testing 🛠️
+## Unit Testing 
 
 These are standalone Arduino sketches to test individual subsystems (servo, motor, ultrasonic sensors) before integrating them together.  
 Each can be copied into the Arduino IDE and uploaded separately.
