@@ -17,8 +17,8 @@ At a high level:
 | **Arduino Uno 🤖**               | Low-level controller for motor & servo control, ultrasonic sensors   |
 | **Raspberry Pi 3/4 🍓**          | Runs OpenCV vision + high-level decision-making (FSM + PD control)   |
 | **Motor Driver (L293D / TB6612) ⚡** | Controls DC motor speed & direction                               |
-| **DC Gear Motor + Servo 🌀**      | Provides rear drive + steering                                       |
-| **Ultrasonic Sensors (6× HC-SR04) 📡** | Distance sensing: front, back, sides, diagonals                 |
+| **DC Gear Motor + Servo 🌀**      | Provides rear drive + steering                                      |
+| **Ultrasonic Sensors (6× HC-SR04) 📡** | Distance sensing: front, back, sides, diagonals                |
 | **Li-Po Battery (3.7V, 2200mAh) 🔋** | Power source for electronics & motors                            |
 
 ---
@@ -50,24 +50,17 @@ High-level behavior is managed by an **FSM**, which switches states depending on
 - **Turn Around** → Used if the path is completely blocked  
 - **Parking** → Activated when magenta parking zone is detected  
 
-### State Transition Diagram
-```mermaid
-stateDiagram-v2
-    [*] --> LaneFollowing
-    LaneFollowing --> ObstacleAvoidance: Obstacle detected
-    ObstacleAvoidance --> LaneFollowing: Path clear
-    LaneFollowing --> Parking: Parking zone detected
-    LaneFollowing --> TurnAround: Blocked path
-    TurnAround --> LaneFollowing: Path clear
-    Parking --> [*]
+### 🔄 Signal Flow
 
+```mermaid
 flowchart TD
-    Camera["📷 Camera"] -->|Lane Detection (OpenCV)| RaspberryPi["🍓 Raspberry Pi"]
-    RaspberryPi -->|Serial Commands| Arduino["🤖 Arduino Uno"]
-    Arduino -->|PWM| MotorDriver["⚡ Motor Driver (L293D/TB6612)"]
-    MotorDriver --> DCMotor["🌀 DC Motor"]
-    Arduino --> Servo["⚙️ Steering Servo"]
-    Ultrasonics["📡 Ultrasonic Sensors"] --> Arduino
+    Camera["Camera"] -->|Lane Detection (OpenCV)| RaspberryPi["Raspberry Pi"]
+    RaspberryPi -->|Serial Commands| Arduino["Arduino Uno"]
+    Arduino -->|PWM| MotorDriver["Motor Driver (L293D/TB6612)"]
+    MotorDriver --> DCMotor["DC Motor"]
+    Arduino --> Servo["Steering Servo"]
+    Ultrasonics["Ultrasonic Sensors"] --> Arduino
+
 
 
 ---
