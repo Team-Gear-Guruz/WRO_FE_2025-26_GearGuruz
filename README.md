@@ -572,125 +572,15 @@ void loop() {
   - Ultrasonic: All VCC → 5 V, all GND → GND. TRIG/ECHO as defined above.
   - Common Ground: Battery –, shield GND, Arduino GND, both buck GNDs, sensor GND, servo GND MUST be common.
 
-### 5) 3 Lap Code with Wall Avoidance
 
 
-#include <Servo.h>
-
-// Motor pins
-const int motorPWM = 5;    
-const int motorDir = 4;    
-
-// Servo (steering)
-Servo steering;
-const int servoPin = 9;
-
-// Ultrasonic sensors (front + sides)
-const int trigPin = 6;
-const int echoPin = 7;
-
-// Lap tracking
-int lapCount = 0;
-int cornerCount = 0;
-unsigned long lastCornerTime = 0;
-
-// Parameters
-int baseSpeed = 150;       // PWM speed
-long distanceThreshold = 20; // cm
-unsigned long cornerCooldown = 2000; // ms between corners
-
-void setup() {
-  pinMode(motorPWM, OUTPUT);
-  pinMode(motorDir, OUTPUT);
-
-  pinMode(trigPin, OUTPUT);
-  pinMode(echoPin, INPUT);
-
-  steering.attach(servoPin);
-
-  Serial.begin(9600);
-  Serial.println("Car Starting...");
-}
-
-long getDistance() {
-  digitalWrite(trigPin, LOW);
-  delayMicroseconds(2);
-  digitalWrite(trigPin, HIGH);
-  delayMicroseconds(10);
-  digitalWrite(trigPin, LOW);
-  long duration = pulseIn(echoPin, HIGH);
-  long distance = duration * 0.034 / 2;
-  return distance;
-}
-
-void driveForward() {
-  digitalWrite(motorDir, HIGH);
-  analogWrite(motorPWM, baseSpeed);
-}
-
-void stopCar() {
-  analogWrite(motorPWM, 0);
-}
-
-void reverseAndAdjust() {
-  Serial.println("Failsafe: Reversing & Adjusting...");
-  digitalWrite(motorDir, LOW);
-  analogWrite(motorPWM, baseSpeed);
-  delay(800); // reverse
-
-  // turn servo randomly left/right
-  if (millis() % 2 == 0) {
-    steering.write(60); // left
-  } else {
-    steering.write(120); // right
-  }
-  delay(600);
-
-  steering.write(90); // reset straight
-}
-
-void loop() {
-  long dist = getDistance();
-  Serial.print("Distance: ");
-  Serial.println(dist);
-
-  if (dist < distanceThreshold) {
-    stopCar();
-    reverseAndAdjust();
-  } else {
-    driveForward();
-  }
-
-  // Corner detection (simple heuristic: distance suddenly large = open space)
-  if (dist > 80 && (millis() - lastCornerTime > cornerCooldown)) {
-    cornerCount++;
-    lastCornerTime = millis();
-    Serial.print("Corner Detected. Count = ");
-    Serial.println(cornerCount);
-
-    if (cornerCount % 4 == 0) { // completed 1 lap
-      lapCount++;
-      Serial.print("Lap Completed: ");
-      Serial.println(lapCount);
-    }
-  }
-
-  // Stop after 3 laps
-  if (lapCount >= 3) {
-    stopCar();
-    Serial.println("Race Finished: 3 Laps Done!");
-    while (1); // halt
-  }
-}
-
-
-# 🚗 WRO 2025 Arduino Code – Square Track 3-Lap Challenge
+# Arduino Code – Square Track 3-Lap Challenge
 
 This Arduino code powers a self-driving robot car to autonomously complete **3 laps on a square track** that contains both **interior and exterior walls**. It uses **6 ultrasonic sensors** to detect obstacles and implements a **left-wall-following algorithm** for navigation.
 
 ---
 
-## 🧠 Navigation Strategy
+## Navigation Strategy
 
 - **Wall Following Rule:** Left-hand rule – always keep the left wall within a specific distance range.
 - **Obstacle Avoidance:** Uses `Front-Center`, `Left`, and `Right` sensors to detect and steer around walls.
@@ -699,7 +589,7 @@ This Arduino code powers a self-driving robot car to autonomously complete **3 l
 
 ---
 
-## 🔌 Pin Configuration
+## Pin Configuration
 
 | Component             | TRIG (Digital) | ECHO (Analog) |
 |----------------------|----------------|---------------|
@@ -715,7 +605,7 @@ This Arduino code powers a self-driving robot car to autonomously complete **3 l
 
 ---
 
-## 🧾 Arduino Code with Explanation
+## Arduino Code with Explanation
 
 ### 1. Pin Mapping and Includes
 
