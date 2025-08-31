@@ -16,6 +16,8 @@ This folder contains official and informal photos of our team, representing both
 | **Official Picture** | A formal photo of the team, used for official WRO documentation and submissions. |
 | **Funny Picture** | A light-hearted team moment, showing our creativity and teamwork beyond just robotics. |
 
+(Both photos are from WSRO held in Billabong High International school, Amanora.)
+
 ---
 
 ## Preview
