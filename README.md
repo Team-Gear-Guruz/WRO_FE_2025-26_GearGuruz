@@ -50,7 +50,7 @@ This repository contains engineering materials of a self-driven vehicle's model 
       <sub><b>PCB</b></sub>
     </td>
     <td align="center">
-      <img src="other/Ball%20bearing%201.jpg" width="220" alt="Ball bearing 1"><br/>
+      <img src="other/Ball%20bearing%2020mmx40mm.jpg" width="220" alt="Ball bearing 1"><br/>
       <sub><b>Ball Bearing 1</b></sub>
     </td>
     <td align="center">
