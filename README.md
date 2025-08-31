@@ -42,10 +42,10 @@ This repository contains engineering materials of a self-driven vehicle's model 
 
 ## Parts photos
 
-<img src="https://raw.githubusercontent.com/ayan-atm/WRO_FE_2025-26/main/other/PCB.jpeg" width="300">
-<img src="https://raw.githubusercontent.com/ayan-atm/WRO_FE_2025-26/main/other/Ball%20bearing%201.jpg" width="300">
-<img src="https://raw.githubusercontent.com/ayan-atm/WRO_FE_2025-26/main/other/Ball%20bearing%202.jpg" width="300">
-<img src="https://raw.githubusercontent.com/ayan-atm/WRO_FE_2025-26/main/other/Motor%20Shield.webp" width="300">
+<img src="https://raw.githubusercontent.com/ayan-atm/WRO_FE_2025-26/main/other/PCB.jpeg" width="400">
+<img src="https://raw.githubusercontent.com/ayan-atm/WRO_FE_2025-26/main/other/Ball%20bearing%2020mmx40mm.jpg" width="400">
+<img src="https://raw.githubusercontent.com/ayan-atm/WRO_FE_2025-26/main/other/Ball%20bearing%202.jpg" width="400">
+<img src="https://raw.githubusercontent.com/ayan-atm/WRO_FE_2025-26/main/other/Motor%20Shield.webp" width="400">
 
 ## Team members
 
