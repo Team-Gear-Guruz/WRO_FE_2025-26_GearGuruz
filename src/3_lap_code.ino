@@ -1,6 +1,5 @@
 /*
   WRO 2025 – Open Challenge (Uno + L293D Shield v1 + Servo + 6x HC-SR04)
-  - Pin map follows the user's photo.
   - Left-wall following with proportional steering.
   - Failsafe: reverse + steer away, then continue.
 */
