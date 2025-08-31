@@ -14,12 +14,12 @@ At a high level:
 
 | Component                        | Role                                                                 |
 |----------------------------------|----------------------------------------------------------------------|
-| **Arduino Uno 🤖**               | Low-level controller for motor & servo control, ultrasonic sensors   |
-| **Raspberry Pi 3/4 🍓**          | Runs OpenCV vision + high-level decision-making (FSM + PD control)   |
-| **Motor Driver (L293D / TB6612) ⚡** | Controls DC motor speed & direction                               |
-| **DC Gear Motor + Servo 🌀**      | Provides rear drive + steering                                      |
-| **Ultrasonic Sensors (6× HC-SR04) 📡** | Distance sensing: front, back, sides, diagonals                |
-| **Li-Po Battery (3.7V, 2200mAh) 🔋** | Power source for electronics & motors                            |
+| **Arduino Uno**                  | Low-level controller for motor & servo control, ultrasonic sensors   |
+| **Raspberry Pi 3/4**             | Runs OpenCV vision + high-level decision-making (FSM + PD control)   |
+| **Motor Driver (L293D / TB6612)**| Controls DC motor speed & direction                                  |
+| **DC Gear Motor + Servo**        | Provides rear drive + steering                                       |
+| **Ultrasonic Sensors (6x HC-SR04)** | Distance sensing: front, back, sides, diagonals                   |
+| **Li-Po Battery (3.7V, 2200mAh)**| Power source for electronics & motors                                |
 
 ---
 
@@ -50,23 +50,21 @@ High-level behavior is managed by an **FSM**, which switches states depending on
 - **Turn Around** → Used if the path is completely blocked  
 - **Parking** → Activated when magenta parking zone is detected  
 
-### 🔄 Signal Flow
-
+### 📊 State Transition Diagram
 ```mermaid
+stateDiagram-v2
+    [*] --> LaneFollowing
+    LaneFollowing --> ObstacleAvoidance: Obstacle detected
+    ObstacleAvoidance --> LaneFollowing: Path clear
+    LaneFollowing --> Parking: Parking zone detected
+    LaneFollowing --> TurnAround: Blocked path
+    TurnAround --> LaneFollowing: Path clear
+    Parking --> [*]
+
 flowchart TD
-    Camera["Camera"] -->|Lane Detection (OpenCV)| RaspberryPi["Raspberry Pi"]
-    RaspberryPi -->|Serial Commands| Arduino["Arduino Uno"]
-    Arduino -->|PWM| MotorDriver["Motor Driver (L293D/TB6612)"]
+    Camera["Camera"] --> RaspberryPi["Raspberry Pi"]
+    RaspberryPi --> Arduino["Arduino Uno"]
+    Arduino --> MotorDriver["Motor Driver (L293D/TB6612)"]
     MotorDriver --> DCMotor["DC Motor"]
     Arduino --> Servo["Steering Servo"]
     Ultrasonics["Ultrasonic Sensors"] --> Arduino
-
-
-
----
-
-✅ This is **the single README.md** you need — just copy this whole block into your `schemes/README.md`.  
-Both diagrams will now show up, because each one is wrapped in its own ` ```mermaid ` block.  
-
-Do you want me to also embed your **actual schematic JPEG** (so it appears under the “Signal Flow” section alongside the mermaid diagram)?
-
