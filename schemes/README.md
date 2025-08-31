@@ -68,3 +68,12 @@ flowchart TD
     MotorDriver --> DCMotor["🌀 DC Motor"]
     Arduino --> Servo["⚙️ Steering Servo"]
     Ultrasonics["📡 Ultrasonic Sensors"] --> Arduino
+
+
+---
+
+✅ This is **the single README.md** you need — just copy this whole block into your `schemes/README.md`.  
+Both diagrams will now show up, because each one is wrapped in its own ` ```mermaid ` block.  
+
+Do you want me to also embed your **actual schematic JPEG** (so it appears under the “Signal Flow” section alongside the mermaid diagram)?
+
