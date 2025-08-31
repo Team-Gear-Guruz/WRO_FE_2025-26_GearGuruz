@@ -110,10 +110,40 @@ The design leverages a **Raspberry Pi** for high-level perception and decision-m
    - Car autonomously navigates laps, avoids obstacles, obeys color-based passing rules, executes turnarounds, and completes vision-guided parallel parking.
 
 
+## 📌 Arduino Pin Mapping for Self-Driving Car (WRO 2025)
+
+### 🔧 Motor (M1 via L293D Shield)
+- **Speed (PWM):** `D11`  
+- **Direction:** Handled internally by the shield’s 74HC595  
+  *(Uses internal pins D4, D7, D8, D12 — do not control directly)*
+
+---
+
+### 🎯 Servo Motor
+- **Signal Pin:** `D9`
+
+---
+
+### 📡 Ultrasonic Sensors (6 Total)
+> Echo lines are placed on analog pins `A0–A5` for cleaner signal and to free digital pins.  
+> Trigger lines are assigned to available digital pins.
+
+| Sensor                | TRIG (Digital) | ECHO (Analog) |
+|------------------------|----------------|----------------|
+| Front-Center (FC)      | `D2`           | `A0`           |
+| Front-Left Diagonal    | `D7`           | `A1`           |
+| Front-Right Diagonal   | `D8`           | `A2`           |
+| Left (L)               | `D10`          | `A3`           |
+| Right (R)              | `D12`          | `A4`           |
+| Back (B)               | `D13`          | `A5`           |
+
+
 ## Unit Testing 🛠️
 
 These are standalone Arduino sketches to test individual subsystems (servo, motor, ultrasonic sensors) before integrating them together.  
 Each can be copied into the Arduino IDE and uploaded separately.
+
+
 
 ### 1) Servo Sweep (D9)
 
@@ -542,6 +572,454 @@ void loop() {
   - Ultrasonic: All VCC → 5 V, all GND → GND. TRIG/ECHO as defined above.
   - Common Ground: Battery –, shield GND, Arduino GND, both buck GNDs, sensor GND, servo GND MUST be common.
 
+### 5) 3 Lap Code with Wall Avoidance
+
+
+#include <Servo.h>
+
+// Motor pins
+const int motorPWM = 5;    
+const int motorDir = 4;    
+
+// Servo (steering)
+Servo steering;
+const int servoPin = 9;
+
+// Ultrasonic sensors (front + sides)
+const int trigPin = 6;
+const int echoPin = 7;
+
+// Lap tracking
+int lapCount = 0;
+int cornerCount = 0;
+unsigned long lastCornerTime = 0;
+
+// Parameters
+int baseSpeed = 150;       // PWM speed
+long distanceThreshold = 20; // cm
+unsigned long cornerCooldown = 2000; // ms between corners
+
+void setup() {
+  pinMode(motorPWM, OUTPUT);
+  pinMode(motorDir, OUTPUT);
+
+  pinMode(trigPin, OUTPUT);
+  pinMode(echoPin, INPUT);
+
+  steering.attach(servoPin);
+
+  Serial.begin(9600);
+  Serial.println("Car Starting...");
+}
+
+long getDistance() {
+  digitalWrite(trigPin, LOW);
+  delayMicroseconds(2);
+  digitalWrite(trigPin, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(trigPin, LOW);
+  long duration = pulseIn(echoPin, HIGH);
+  long distance = duration * 0.034 / 2;
+  return distance;
+}
+
+void driveForward() {
+  digitalWrite(motorDir, HIGH);
+  analogWrite(motorPWM, baseSpeed);
+}
+
+void stopCar() {
+  analogWrite(motorPWM, 0);
+}
+
+void reverseAndAdjust() {
+  Serial.println("Failsafe: Reversing & Adjusting...");
+  digitalWrite(motorDir, LOW);
+  analogWrite(motorPWM, baseSpeed);
+  delay(800); // reverse
+
+  // turn servo randomly left/right
+  if (millis() % 2 == 0) {
+    steering.write(60); // left
+  } else {
+    steering.write(120); // right
+  }
+  delay(600);
+
+  steering.write(90); // reset straight
+}
+
+void loop() {
+  long dist = getDistance();
+  Serial.print("Distance: ");
+  Serial.println(dist);
+
+  if (dist < distanceThreshold) {
+    stopCar();
+    reverseAndAdjust();
+  } else {
+    driveForward();
+  }
+
+  // Corner detection (simple heuristic: distance suddenly large = open space)
+  if (dist > 80 && (millis() - lastCornerTime > cornerCooldown)) {
+    cornerCount++;
+    lastCornerTime = millis();
+    Serial.print("Corner Detected. Count = ");
+    Serial.println(cornerCount);
+
+    if (cornerCount % 4 == 0) { // completed 1 lap
+      lapCount++;
+      Serial.print("Lap Completed: ");
+      Serial.println(lapCount);
+    }
+  }
+
+  // Stop after 3 laps
+  if (lapCount >= 3) {
+    stopCar();
+    Serial.println("Race Finished: 3 Laps Done!");
+    while (1); // halt
+  }
+}
+
+
+# 🚗 WRO 2025 Arduino Code – Square Track 3-Lap Challenge
+
+This Arduino code powers a self-driving robot car to autonomously complete **3 laps on a square track** that contains both **interior and exterior walls**. It uses **6 ultrasonic sensors** to detect obstacles and implements a **left-wall-following algorithm** for navigation.
+
+---
+
+## 🧠 Navigation Strategy
+
+- **Wall Following Rule:** Left-hand rule – always keep the left wall within a specific distance range.
+- **Obstacle Avoidance:** Uses `Front-Center`, `Left`, and `Right` sensors to detect and steer around walls.
+- **Lap Detection:** When the robot re-enters a specific sensor pattern near the start zone (e.g., wall in front but no wall on left), a lap is counted.
+- **Goal:** Complete 3 full laps and stop.
+
+---
+
+## 🔌 Pin Configuration
+
+| Component             | TRIG (Digital) | ECHO (Analog) |
+|----------------------|----------------|---------------|
+| Front-Center (FC)    | D2             | A0            |
+| Front-Left Diagonal  | D7             | A1            |
+| Front-Right Diagonal | D8             | A2            |
+| Left (L)             | D10            | A3            |
+| Right (R)            | D12            | A4            |
+| Back (B)             | D13            | A5            |
+
+- **Motor (M1):** PWM on D11 (Direction handled by L293D shield)
+- **Servo:** Signal on D9
+
+---
+
+## 🧾 Arduino Code with Explanation
+
+### 1. Pin Mapping and Includes
+
+We define all the pin assignments and include the Servo library to control the steering mechanism.
+
+```cpp
+#define TRIG_FC 2
+#define ECHO_FC A0
+#define TRIG_FLD 7
+#define ECHO_FLD A1
+#define TRIG_FRD 8
+#define ECHO_FRD A2
+#define TRIG_L 10
+#define ECHO_L A3
+#define TRIG_R 12
+#define ECHO_R A4
+#define TRIG_B 13
+#define ECHO_B A5
+
+#define MOTOR_PWM 11
+#define SERVO_PIN 9
+#define STBY 4 // used internally by the shield
+
+#include <Servo.h>
+````
+
+---
+
+### 2. Global Variables and Distance Reader
+
+* `lapCount`: Tracks completed laps.
+* `inStartZone`: Used to avoid double-counting laps.
+* `readDistance()`: Generic ultrasonic reader using TRIG/ECHO logic.
+
+```cpp
+Servo steering;
+
+int lapCount = 0;
+bool inStartZone = false;
+unsigned long lastLapTime = 0;
+
+long readDistance(int trigPin, int echoPin) {
+  digitalWrite(trigPin, LOW); delayMicroseconds(2);
+  digitalWrite(trigPin, HIGH); delayMicroseconds(10);
+  digitalWrite(trigPin, LOW);
+
+  long duration = pulseIn(echoPin, HIGH, 30000); // 30ms timeout
+  if (duration == 0) return 400;
+  return duration / 58;
+}
+```
+
+---
+
+### 3. Basic Movement Commands
+
+These functions control the car's direction and speed using the motor and servo.
+
+```cpp
+void moveForward() {
+  analogWrite(MOTOR_PWM, 180);  // Set motor speed
+}
+
+void turnLeft() {
+  steering.write(120);  // Servo turn left
+}
+
+void turnRight() {
+  steering.write(60);   // Servo turn right
+}
+
+void goStraight() {
+  steering.write(90);   // Servo center
+}
+
+void stopCar() {
+  analogWrite(MOTOR_PWM, 0);  // Stop motor
+}
+```
+
+---
+
+### 4. Setup Routine
+
+Sets pin modes and prepares the motor and servo.
+
+```cpp
+void setup() {
+  Serial.begin(9600);
+
+  pinMode(TRIG_FC, OUTPUT); pinMode(ECHO_FC, INPUT);
+  pinMode(TRIG_FLD, OUTPUT); pinMode(ECHO_FLD, INPUT);
+  pinMode(TRIG_FRD, OUTPUT); pinMode(ECHO_FRD, INPUT);
+  pinMode(TRIG_L, OUTPUT); pinMode(ECHO_L, INPUT);
+  pinMode(TRIG_R, OUTPUT); pinMode(ECHO_R, INPUT);
+  pinMode(TRIG_B, OUTPUT); pinMode(ECHO_B, INPUT);
+
+  pinMode(MOTOR_PWM, OUTPUT);
+  steering.attach(SERVO_PIN);
+  goStraight();  // Default orientation
+}
+```
+
+---
+
+### 5. Main Navigation Loop
+
+The loop reads distances and makes steering decisions. It also monitors lap count based on a “start zone” condition.
+
+```cpp
+void loop() {
+  long distFC = readDistance(TRIG_FC, ECHO_FC);
+  long distL = readDistance(TRIG_L, ECHO_L);
+  long distR = readDistance(TRIG_R, ECHO_R);
+```
+
+#### 🚩 Lap Detection Logic
+
+This logic ensures that a lap is only counted when the robot passes through a specific condition: wall ahead but no left wall.
+
+```cpp
+  if (distFC < 20 && distL > 50 && (millis() - lastLapTime > 3000)) {
+    if (!inStartZone) {
+      lapCount++;
+      Serial.print("Lap Completed: "); Serial.println(lapCount);
+      lastLapTime = millis();
+      inStartZone = true;
+    }
+  } else if (distFC > 30) {
+    inStartZone = false;
+  }
+```
+
+#### 🧭 Wall-Following Steering
+
+Uses distance from the left wall to steer the car.
+
+```cpp
+  if (distL < 15) {
+    turnRight();  // Too close to wall
+  } else if (distL > 30) {
+    turnLeft();   // Too far from wall
+  } else {
+    goStraight();
+  }
+
+  moveForward();  // Keep moving
+```
+
+#### 🛑 Stop After 3 Laps
+
+```cpp
+  if (lapCount >= 3) {
+    stopCar();
+    while (true) {
+      Serial.println("Mission Complete!");
+      delay(1000);
+    }
+  }
+
+  delay(100);  // Loop pacing
+}
+```
+
+---
+
+## 🛠️ Customization Tips
+
+| Goal                       | What to Adjust                         |
+| -------------------------- | -------------------------------------- |
+| More precise turning       | Tune `steering.write()` values         |
+| Better lap detection       | Modify `distFC` and `distL` thresholds |
+| Change wall-following side | Replace `distL` logic with `distR`     |
+| Avoid diagonal corners     | Use FLD / FRD for early turns          |
+
+---
+
+## 📷 Optional Enhancements
+
+* Add line sensors or camera for finish line detection
+* Use PID for better steering control
+* Switch to right-wall following by updating logic
+
+---
+FULL CODE- 
+```cpp
+// === Include Libraries ===
+#define TRIG_FC 2
+#define ECHO_FC A0
+#define TRIG_FLD 7
+#define ECHO_FLD A1
+#define TRIG_FRD 8
+#define ECHO_FRD A2
+#define TRIG_L 10
+#define ECHO_L A3
+#define TRIG_R 12
+#define ECHO_R A4
+#define TRIG_B 13
+#define ECHO_B A5
+
+#define MOTOR_PWM 11
+#define SERVO_PIN 9
+#define STBY 4 // used internally on shield, don't touch
+
+#include <Servo.h>
+
+Servo steering;
+
+int lapCount = 0;
+bool inStartZone = false;
+unsigned long lastLapTime = 0;
+
+// === Distance Reading ===
+long readDistance(int trigPin, int echoPin) {
+  digitalWrite(trigPin, LOW); delayMicroseconds(2);
+  digitalWrite(trigPin, HIGH); delayMicroseconds(10);
+  digitalWrite(trigPin, LOW);
+
+  long duration = pulseIn(echoPin, HIGH, 30000); // 30ms timeout
+  if (duration == 0) return 400;
+  return duration / 58;
+}
+
+// === Movement Functions ===
+void moveForward() {
+  analogWrite(MOTOR_PWM, 180);
+}
+
+void turnLeft() {
+  steering.write(120);  // Steer left
+}
+
+void turnRight() {
+  steering.write(60);   // Steer right
+}
+
+void goStraight() {
+  steering.write(90);   // Center
+}
+
+void stopCar() {
+  analogWrite(MOTOR_PWM, 0);
+}
+
+// === Setup ===
+void setup() {
+  Serial.begin(9600);
+
+  pinMode(TRIG_FC, OUTPUT); pinMode(ECHO_FC, INPUT);
+  pinMode(TRIG_FLD, OUTPUT); pinMode(ECHO_FLD, INPUT);
+  pinMode(TRIG_FRD, OUTPUT); pinMode(ECHO_FRD, INPUT);
+  pinMode(TRIG_L, OUTPUT); pinMode(ECHO_L, INPUT);
+  pinMode(TRIG_R, OUTPUT); pinMode(ECHO_R, INPUT);
+  pinMode(TRIG_B, OUTPUT); pinMode(ECHO_B, INPUT);
+
+  pinMode(MOTOR_PWM, OUTPUT);
+  steering.attach(SERVO_PIN);
+  goStraight();
+}
+
+// === Main Loop ===
+void loop() {
+  long distFC = readDistance(TRIG_FC, ECHO_FC);
+  long distL = readDistance(TRIG_L, ECHO_L);
+  long distR = readDistance(TRIG_R, ECHO_R);
+
+  // Lap detection based on start-zone pattern
+  if (distFC < 20 && distL > 50 && (millis() - lastLapTime > 3000)) {
+    if (!inStartZone) {
+      lapCount++;
+      Serial.print("Lap Completed: "); Serial.println(lapCount);
+      lastLapTime = millis();
+      inStartZone = true;
+    }
+  } else if (distFC > 30) {
+    inStartZone = false;
+  }
+
+  // Wall-following (left-hand rule)
+  if (distL < 15) {
+    // Too close to left wall, steer right
+    turnRight();
+  } else if (distL > 30) {
+    // Too far from left wall, steer left
+    turnLeft();
+  } else {
+    goStraight();
+  }
+
+  moveForward();
+
+  // End after 3 laps
+  if (lapCount >= 3) {
+    stopCar();
+    while (true) {
+      Serial.println("Mission Complete!");
+      delay(1000);
+    }
+  }
+
+  delay(100);
+}
+
+```
 
 ```bash
 cd src/
