@@ -40,12 +40,29 @@ This repository contains engineering materials of a self-driven vehicle's model 
 | Breadboard / PCB         | 1        | For stable wiring and connections                      |
 | Camera (Pi Camera / USB) | 1        | Used by Raspberry Pi for lane + obstacle detection     |
 
-## Parts photos
+<!-- Parts Gallery -->
+<h2>🧩 Parts Photos</h2>
 
-<img src="https://raw.githubusercontent.com/ayan-atm/WRO_FE_2025-26/main/other/PCB.jpeg" width="400">
-<img src="https://raw.githubusercontent.com/ayan-atm/WRO_FE_2025-26/main/other/Ball%20bearing%2020mmx40mm.jpg" width="400">
-<img src="https://raw.githubusercontent.com/ayan-atm/WRO_FE_2025-26/main/other/Ball%20bearing%202.jpg" width="400">
-<img src="https://raw.githubusercontent.com/ayan-atm/WRO_FE_2025-26/main/other/Motor%20Shield.webp" width="400">
+<table>
+  <tr>
+    <td align="center">
+      <img src="other/PCB.jpeg" width="220" alt="PCB"><br/>
+      <sub><b>PCB</b></sub>
+    </td>
+    <td align="center">
+      <img src="other/Ball%20bearing%201.jpg" width="220" alt="Ball bearing 1"><br/>
+      <sub><b>Ball Bearing 1</b></sub>
+    </td>
+    <td align="center">
+      <img src="other/Ball%20bearing%202.jpg" width="220" alt="Ball bearing 2"><br/>
+      <sub><b>Ball Bearing 2</b></sub>
+    </td>
+    <td align="center">
+      <img src="other/Motor%20Shield.webp" width="220" alt="Motor Shield"><br/>
+      <sub><b>Motor Shield</b></sub>
+    </td>
+  </tr>
+</table>
 
 ## Team members
 
