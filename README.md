@@ -55,9 +55,7 @@ Kushal Khemani, age 16, kushal.khemani@gmail.com
 
 ## Team Photos
 
-![Team Photo](t-photos/Official Picture.jpeg)
-![Team Photo](t-photos/Funny Picture.png)
-
+<img src="https://github.com/ayan-atm/WRO_FE_2025-26/blob/main/t-photos/Official Photo.jpeg" width="40%" height="40%"> <img src="https://github.com/ayan-atm/WRO_FE_2025-26/blob/main/t-photos/Funny Photo.png" width="40%" height="40%">
 
 ##  Quick Overview
 
