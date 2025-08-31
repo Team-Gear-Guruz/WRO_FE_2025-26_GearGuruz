@@ -52,19 +52,20 @@ The FSM manages the robot’s high-level behavior by switching between states ba
 ```mermaid
 stateDiagram-v2
     [*] --> LaneFollowing
-    LaneFollowing --> ObstacleAvoidance: Obstacle detected
-    ObstacleAvoidance --> LaneFollowing: Path clear
-    LaneFollowing --> Parking: Parking zone detected
-    LaneFollowing --> TurnAround: Blocked path
-    TurnAround --> LaneFollowing: Path clear
+    LaneFollowing --> ObstacleAvoidance : Obstacle detected
+    ObstacleAvoidance --> LaneFollowing : Path clear
+    LaneFollowing --> Parking : Parking zone detected
+    LaneFollowing --> TurnAround : Blocked path
+    TurnAround --> LaneFollowing : Path clear
     Parking --> [*]
 
 ## 🔄 Signal Flow
 
 ```mermaid
 flowchart TD
-    Camera -->|OpenCV Vision| RaspberryPi
-    RaspberryPi -->|Serial Commands| Arduino
-    Arduino -->|PWM| MotorDriver --> DCMotor
-    Arduino --> Servo
-    Ultrasonics --> Arduino
+    Camera["Camera"] -->|OpenCV vision| RaspberryPi["Raspberry Pi"]
+    RaspberryPi -->|Serial commands| Arduino["Arduino Uno"]
+    Arduino -->|PWM| MotorDriver["Motor Driver (L293D/TB6612)"]
+    MotorDriver --> DCMotor["DC Motor"]
+    Arduino --> Servo["Steering Servo"]
+    Ultrasonics["Ultrasonic Sensors"] --> Arduino
