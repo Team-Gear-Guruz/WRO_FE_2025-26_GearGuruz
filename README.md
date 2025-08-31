@@ -1223,9 +1223,186 @@ void loop() {
 
 
 ```
-## **This is where the Arduino part ends.**
+## **Now we shall be using a Raspberry Pi too.**
 
 _**NOTE**_ From Kushal Khemani - This robot was made in less than 3 weeks (due to school examinations and SAT prep for both team members).
+
+# Getting Started
+
+Ayan and I had absolutely no idea how to use a Raspberry Pi when we first started working with it. At the beginning, even basic tasks like flashing the OS onto an SD card or connecting it to a monitor felt overwhelming. To figure things out, we relied on a few YouTube tutorials that broke the process down step by step. Slowly, by following along with these resources, we gained confidence and were able to start experimenting with the Pi ourselves.
+
+**Helpful videos we used:**
+
+1. [Guide on setting up a Raspberry Pi 4](https://www.youtube.com/watch?v=ntaXWS8Lk34)
+2. [Installing Raspberry Pi OS](https://www.youtube.com/watch?v=ntLJmHOJ0ME)
+3. [Beginner-friendly tutorial on GPIO pins](https://www.youtube.com/watch?v=H1lxZweM52U)
+
+Since I had just moved houses and all my electronics were still at my old place, I had to figure out how to use the Raspberry Pi without a keyboard or monitor. I ended up setting it up for headless operation, which means accessing it remotely from my laptop over Wi-Fi. By enabling SSH and using a tool like PuTTY or the built-in terminal, I could control the Pi entirely from my computer. This allowed me to run commands, install software, and experiment with projects without needing the physical peripherals. It was a lifesaver while I waited to get my setup back from the old house.
+
+This is what we did - 
+
+### **Step 1: Download Raspberry Pi OS**
+
+1. Go to the [Raspberry Pi Software page](https://www.raspberrypi.com/software/).
+2. Download **Raspberry Pi OS Lite** (no desktop required, smaller and faster for headless use).
+
+---
+
+### **Step 2: Flash the OS to the SD Card**
+
+1. Download and install **Raspberry Pi Imager** or **Balena Etcher** on your computer.
+2. Insert your SD card.
+3. Open the imager/etcher → select the OS image → select the SD card → flash.
+4. Wait until the process finishes.
+
+---
+
+### **Step 3: Enable SSH**
+
+1. After flashing, open the SD card folder on your computer.
+2. In the **root directory** (the main folder), create a blank file named:
+
+```
+ssh
+```
+
+(no extension, all lowercase).
+3\. This will allow you to remotely access the Pi using SSH.
+
+---
+
+### **Step 4: Connect to Wi-Fi**
+
+1. In the same SD card root directory, create a file called:
+
+```
+wpa_supplicant.conf
+```
+
+2. Open it with a text editor and add:
+
+```conf
+country=IN
+ctrl_interface=DIR=/var/run/wpa_supplicant GROUP=netdev
+update_config=1
+
+network={
+    ssid="YOUR_WIFI_SSID"
+    psk="YOUR_WIFI_PASSWORD"
+    key_mgmt=WPA-PSK
+}
+```
+
+3. Replace `YOUR_WIFI_SSID` and `YOUR_WIFI_PASSWORD` with your network info.
+4. Save the file. This will let your Pi connect to Wi-Fi on boot.
+
+---
+
+### **Step 5: Boot the Raspberry Pi**
+
+1. Insert the SD card into the Pi.
+2. Connect power.
+3. Wait 2–3 minutes for it to boot and connect to Wi-Fi.
+
+---
+
+### **Step 6: Find the Pi’s IP Address**
+
+* Option 1: Log into your router and check connected devices.
+* Option 2: Use a phone app like **Fing** to scan your Wi-Fi network.
+* Look for a device named `raspberrypi`. Note the IP address (e.g., `192.168.1.5`).
+
+---
+
+### **Step 7: Connect via SSH**
+
+* **On Windows:** Use [PuTTY](https://www.putty.org/)
+
+  1. Open PuTTY → enter the Pi’s IP → Port = 22 → SSH → Open.
+  2. Login with username: `pi`, password: `raspberry`.
+
+* **On Mac/Linux:** Open Terminal and type:
+
+```bash
+ssh pi@<Pi_IP_address>
+```
+
+(e.g., `ssh pi@192.168.1.5`)
+
+* Enter password: `raspberry`.
+
+---
+
+### **Step 8: Update Your Pi**
+
+Once connected, run:
+
+```bash
+sudo apt update
+sudo apt upgrade -y
+```
+
+This ensures your Pi has the latest software.
+
+## Setting up VSCode
+
+
+### **Step 1: Install VS Code and Remote SSH Extension**
+
+1. Make sure **Visual Studio Code** is installed on your computer: [VS Code Download](https://code.visualstudio.com/).
+2. Open VS Code → go to **Extensions (Ctrl+Shift+X)** → search for **Remote - SSH** → install it.
+
+---
+
+### **Step 2: Connect VS Code to Raspberry Pi via SSH**
+
+1. Press `F1` → type **Remote-SSH: Connect to Host…** → select **Add New SSH Host**.
+2. Enter your SSH connection:
+
+```bash
+ssh pi@<Pi_IP_address>
+```
+
+Example: `ssh pi@192.168.1.5`
+3\. Choose the default SSH config file location when prompted.
+4\. Once added, select the host → VS Code will open a new window connected to your Pi.
+5\. Enter password: `raspberry`.
+
+Now your VS Code is **directly running on the Pi**, even though it’s headless.
+
+---
+
+### **Step 3: Open or Create a Project**
+
+1. In the new VS Code window, go to **File → Open Folder** → navigate to a folder on your Pi (e.g., `/home/pi/projects`).
+2. You can now **create new Python, C++, or Arduino files** here.
+
+---
+
+### **Step 4: Upload/Run Code**
+
+* Any file you save in VS Code is automatically on your Pi.
+* To run Python code, open the terminal in VS Code (\`Ctrl+\`\`) and run:
+
+```bash
+python3 myfile.py
+```
+
+* For C++ or other languages, you can compile/run the code directly in the terminal.
+
+---
+
+### **Step 5 (Optional): Sync Local Folder to Pi**
+
+If you want to edit files locally and upload automatically:
+
+1. Install **SFTP extension** in VS Code.
+2. Configure it with your Pi’s IP, username `pi`, password `raspberry`.
+3. Every time you save locally, it uploads to the Pi automatically.
+
+
+
+
 
 ```bash
 cd src/
