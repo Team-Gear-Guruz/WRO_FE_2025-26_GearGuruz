@@ -62,9 +62,9 @@ stateDiagram-v2
     Parking --> [*]
 
 flowchart TD
-    Camera["Camera"] --> RaspberryPi["Raspberry Pi"]
-    RaspberryPi --> Arduino["Arduino Uno"]
-    Arduino --> MotorDriver["Motor Driver (L293D/TB6612)"]
-    MotorDriver --> DCMotor["DC Motor"]
-    Arduino --> Servo["Steering Servo"]
-    Ultrasonics["Ultrasonic Sensors"] --> Arduino
+    Camera["📷 Camera"] --> Pi["🍓 Raspberry Pi"]
+    Pi --> Arduino["🤖 Arduino Uno"]
+    Arduino --> MotorDriver["⚡ Motor Driver (L293D/TB6612)"]
+    MotorDriver --> DCMotor["🌀 DC Motor"]
+    Arduino --> Servo["⚙️ Steering Servo"]
+    Ultrasonics["📡 Ultrasonic Sensors"] --> Arduino
