@@ -47,6 +47,10 @@ This repository contains engineering materials of a self-driven vehicle's model 
 | Breadboard / PCB         | 1        | For stable wiring and connections                      |
 | Camera (Pi Camera / USB) | 1        | Used by Raspberry Pi for lane + obstacle detection     |
 
+## Parts photos
+
+
+
 ## Team members
 
 Ayan Atmakuri, age 16, atmakuriayan@gmail.com 
