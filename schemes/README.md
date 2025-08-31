@@ -14,12 +14,12 @@ At a high level:
 
 | Component                        | Role                                                                 |
 |----------------------------------|----------------------------------------------------------------------|
-| **Arduino Uno**                  | Low-level controller for motor & servo control, ultrasonic sensors   |
-| **Raspberry Pi 3/4**             | Runs OpenCV vision + high-level decision-making (FSM + PD control)   |
-| **Motor Driver (L293D / TB6612)**| Controls DC motor speed & direction                                  |
-| **DC Gear Motor + Servo**        | Provides rear drive + steering                                       |
-| **Ultrasonic Sensors (6x HC-SR04)** | Distance sensing: front, back, sides, diagonals                   |
-| **Li-Po Battery (3.7V, 2200mAh)**| Power source for electronics & motors                                |
+| **Arduino Uno 🤖**               | Low-level controller for motor & servo control, ultrasonic sensors   |
+| **Raspberry Pi 3/4 🍓**          | Runs OpenCV vision + high-level decision-making (FSM + PD control)   |
+| **Motor Driver (L293D / TB6612) ⚡** | Controls DC motor speed & direction                               |
+| **DC Gear Motor + Servo 🌀**      | Provides rear drive + steering                                       |
+| **Ultrasonic Sensors (6× HC-SR04) 📡** | Distance sensing: front, back, sides, diagonals                 |
+| **Li-Po Battery (3.7V, 2200mAh) 🔋** | Power source for electronics & motors                            |
 
 ---
 
@@ -60,7 +60,6 @@ stateDiagram-v2
     LaneFollowing --> TurnAround: Blocked path
     TurnAround --> LaneFollowing: Path clear
     Parking --> [*]
-
 
 flowchart TD
     Camera["📷 Camera"] -->|Lane Detection (OpenCV)| RaspberryPi["🍓 Raspberry Pi"]
