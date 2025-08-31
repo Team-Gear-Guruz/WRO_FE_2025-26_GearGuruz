@@ -42,10 +42,10 @@ This repository contains engineering materials of a self-driven vehicle's model 
 
 ## Parts photos
 
-<img src="https://github.com/ayan-atm/WRO_FE_2025-26/blob/main/others/PCB.jpeg" width="40%" height="40%">
-<img src="https://github.com/ayan-atm/WRO_FE_2025-26/blob/main/others/Ball bearing 1.jpg" width="40%" height="40%">
-<img src="https://github.com/ayan-atm/WRO_FE_2025-26/blob/main/others/Ball bearing 2.jpg" width="40%" height="40%">
-<img src="https://github.com/ayan-atm/WRO_FE_2025-26/blob/main/others/Motor Shield.webp" width="40%" height="40%">
+<img src="https://raw.githubusercontent.com/ayan-atm/WRO_FE_2025-26/main/other/PCB.jpeg" width="400">
+<img src="https://raw.githubusercontent.com/ayan-atm/WRO_FE_2025-26/main/other/Ball%20bearing%201.jpg" width="400">
+<img src="https://raw.githubusercontent.com/ayan-atm/WRO_FE_2025-26/main/other/Ball%20bearing%202.jpg" width="400">
+<img src="https://raw.githubusercontent.com/ayan-atm/WRO_FE_2025-26/main/other/Motor%20Shield.webp" width="400">
 
 ## Team members
 
@@ -55,7 +55,8 @@ Kushal Khemani, age 16, kushal.khemani@gmail.com
 
 ## Team Photos
 
-<img src="https://github.com/ayan-atm/WRO_FE_2025-26/blob/main/t-photos/Official Photo.jpeg" width="40%" height="40%"> <img src="https://github.com/ayan-atm/WRO_FE_2025-26/blob/main/t-photos/Funny Photo.png" width="40%" height="40%">
+<img src="https://raw.githubusercontent.com/ayan-atm/WRO_FE_2025-26/main/t-photos/Official%20Photo.jpeg" width="400">
+<img src="https://raw.githubusercontent.com/ayan-atm/WRO_FE_2025-26/main/t-photos/Funny%20Photo.png" width="400">
 
 ##  Quick Overview
 
