@@ -108,7 +108,7 @@ The design leverages a **Raspberry Pi** for high-level perception and decision-m
 4. **Real World Performance**  
    - Car autonomously navigates laps, avoids obstacles, obeys color-based passing rules, executes turnarounds, and completes vision-guided parallel parking.
 
-_**NOTE**_ From Kushal Khemani - This robot was made in less than 3 weeks (due to school examinations and SAT prep for both team members).
+
 
 ## 1. Mobility Management - finding what suits best 
 
@@ -1223,7 +1223,10 @@ void loop() {
 
 
 ```
-##**This is where the Arduino part ends.**
+## **This is where the Arduino part ends.**
+
+_**NOTE**_ From Kushal Khemani - This robot was made in less than 3 weeks (due to school examinations and SAT prep for both team members).
+
 ```bash
 cd src/
 python3 wro.py sim                      # Run in simulator
