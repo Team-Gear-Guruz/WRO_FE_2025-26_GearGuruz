@@ -9,7 +9,7 @@ This folder contains official and informal photos of our team, representing both
 
 ---
 
-## 📸 Photos Included
+## Photos Included
 
 | Photo | Description |
 |-------|-------------|
@@ -18,7 +18,7 @@ This folder contains official and informal photos of our team, representing both
 
 ---
 
-## 🖼️ Preview
+## Preview
 
 <p align="center">
   <img src="Official%20Picture.jpeg" alt="Official Team Photo" width="400"/>  
@@ -33,10 +33,3 @@ This folder contains official and informal photos of our team, representing both
 </p>
 
 ---
-
-## 🌟 Why Two Photos?
-
-- **Professional:** Represents us in the competition setting.  
-- **Funny:** Reminds us that robotics is not only about engineering but also about enjoying the process and bonding as a team.  
-
-Together, these photos reflect the **spirit of teamwork, creativity, and dedication** behind our project 🚀
