@@ -7,7 +7,7 @@ Engineering materials
   <img src="https://raw.githubusercontent.com/ayan-atm/WRO_FE_2025-26/main/other/TeamBanner.png" alt="Team Banner" width="900"/>
 </p>
 
-This repository contains engineering materials of a self-driven vehicle's model participating in the WRO Future Engineers competition in the season 2022.
+This repository contains engineering materials of a self-driven vehicle's model participating in the WRO Future Engineers competition in the season 2025.
 
 ## Content of Repository
 
