@@ -87,7 +87,7 @@ A vision-guided mini-vehicle using:
 - **Simple Serial Protocol**: Commands like `M <int>`, `SUS <us>`, `STOP`, `PING`  
 - **Features**: Lane following, obstacle avoidance, auto-parking, HSV tuning, simulator.
 
-## Introduction
+# Introduction
 
 This repository hosts the software and wiring for an autonomous robot car built for the **World Robot Olympiad 2025 – Future Engineers Challenge**.
 
@@ -364,7 +364,7 @@ The Arduino interprets these and adjusts movement accordingly.
 
 
 
-## Arduino Pin Mapping for Self-Driving Car (WRO 2025)
+# Arduino Pin Mapping for Self-Driving Car (WRO 2025)
 
 ### 🔧 Motor (M1 via L293D Shield)
 - **Speed (PWM):** `D11`  
@@ -383,7 +383,7 @@ The Arduino interprets these and adjusts movement accordingly.
 > Trigger lines are assigned to available digital pins.
 
 
-## Unit Testing 
+# Unit Testing 
 
 These are standalone Arduino sketches to test individual subsystems (servo, motor, ultrasonic sensors) before integrating them together.  
 Each can be copied into the Arduino IDE and uploaded separately.
