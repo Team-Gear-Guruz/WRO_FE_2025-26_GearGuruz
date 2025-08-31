@@ -9,7 +9,7 @@ This folder contains the **schematic diagrams** and electrical wiring of our WRO
 | Component | Role |
 |-----------|------|
 | **Arduino Uno** | Low-level controller for motor & servo control, ultrasonic sensors |
-| **Raspberry Pi 3/4** | Vision (OpenCV) + decision-making (FSM, PD control) |
+| **Raspberry Pi 3B+** | Vision (OpenCV) + decision-making (FSM, PD control) |
 | **Motor Driver (L293D / TB6612)** | Controls DC motor speed & direction |
 | **DC Gear Motor + Servo** | Rear drive + steering system |
 | **Ultrasonic Sensors (6x HC-SR04)** | Distance sensing: front, back, sides, diagonals |
