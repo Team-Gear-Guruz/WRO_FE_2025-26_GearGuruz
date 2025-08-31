@@ -167,7 +167,7 @@ The mounting design ensures:
 Failsafe routines in the software monitor obstacle proximity. If all sensor readings drop below safe limits, the car **automatically reverses and adjusts angle** to prevent collision or deadlock.
 
 
-## 2. Power and Sense Management - tring to be energy efficient
+## 2. Power and Sense Management - trying to be energy efficient
 
 To enable robust autonomous operation across both the Open and Obstacle Challenges, our power and sensing systems were designed to be modular, efficient, and fail-safe. Key design goals included isolating high-power and logic domains, ensuring consistent voltage supply for sensitive components, and providing wide-angle situational awareness through sensor fusion.
 
