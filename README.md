@@ -41,7 +41,7 @@ This repository contains engineering materials of a self-driven vehicle's model 
 | Camera (Pi Camera / USB) | 1        | Used by Raspberry Pi for lane + obstacle detection     |
 
 <!-- Parts Gallery -->
-<h2>🧩 Parts Photos</h2>
+<h2> Photos of parts</h2>
 
 <table>
   <tr>
