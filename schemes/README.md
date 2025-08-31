@@ -1,26 +1,31 @@
-Electromechanical diagrams
-====
+# ⚡ Electromechanical Diagrams
 
-This schematic diagram was made using the help of the software Fritzing.
+This folder contains the **electrical and wiring schematics** of our WRO Future Engineers vehicle, designed with **Fritzing**.  
+It documents how the **Raspberry Pi (vision + logic)** communicates with the **Arduino (actuation + sensors)** to create a fully autonomous robot.
 
-This folder contains the electrical schematic of our WRO Future Engineers vehicle.
+---
 
-🔧 Key Components
+## 🔑 Key Components
 
-Arduino Uno – Motor & servo control, ultrasonic sensors.
+| Component | Role |
+|-----------|------|
+| **Arduino Uno** | Low-level controller for motor & servo control, ultrasonic sensors |
+| **Raspberry Pi 3/4** | Vision (OpenCV) + decision-making (FSM, PD control) |
+| **Motor Driver (L293D / TB6612)** | Controls DC motor speed & direction |
+| **DC Gear Motor + Servo** | Rear drive + steering system |
+| **Ultrasonic Sensors (6× HC-SR04)** | Distance sensing: front, back, sides, diagonals |
+| **Li-Po Battery (3.7V, 2200mAh)** | Power source for electronics & motors |
 
-Raspberry Pi – Vision + decision-making (camera + OpenCV).
+---
 
-Motor Driver (L293/TB6612) – DC motor speed & direction.
+## 🔁 Signal Flow
 
-DC Motor & Servo – Drive + steering system.
+```mermaid
+flowchart TD
+    Camera -->|OpenCV Vision| RaspberryPi
+    RaspberryPi -->|Serial Commands| Arduino
+    Arduino -->|PWM| MotorDriver --> DCMotor
+    Arduino --> Servo
+    Ultrasonics --> Arduino
 
-Ultrasonic Sensors (6x HC-SR04) – Distance sensing (front, back, sides, diagonals).
-
-Li-Po Battery (3.7V, 2200mAh) – Power source.
-
-
-⚙️ Signal Flow
-
-Camera → Raspberry Pi (Vision + FSM) → Serial → Arduino → Motors & Servo
-  ↳ Ultrasonic sensors → Arduino (safety & obstacle detection)
+<img src="Schematic%20Diagram.jpeg" width="600" alt="Electromechanical Schematic">
