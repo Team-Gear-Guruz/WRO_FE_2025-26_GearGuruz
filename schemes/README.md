@@ -59,7 +59,6 @@ stateDiagram-v2
     TurnAround --> LaneFollowing: Path clear
     Parking --> [*]
 
-
 ## 🔄 Signal Flow
 
 ```mermaid
