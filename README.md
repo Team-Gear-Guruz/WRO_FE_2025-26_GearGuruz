@@ -535,13 +535,12 @@ void loop() {
 
 
 ```
-/*
+
   Wiring Notes:
   - Motor: connect to M1 on L293D shield; supply 6–12 V to shield VM/EXT PWR; GND common with Arduino.
   - Servo: D10 signal; POWER from separate 5–6 V buck (≥3–5 A). Tie buck GND to Arduino GND.
   - Ultrasonic: All VCC → 5 V, all GND → GND. TRIG/ECHO as defined above.
   - Common Ground: Battery –, shield GND, Arduino GND, both buck GNDs, sensor GND, servo GND MUST be common.
-*/
 
 
 ```bash
