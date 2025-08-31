@@ -62,9 +62,6 @@ stateDiagram-v2
     Parking --> [*]
 
 
-## 🔄 Signal Flow
-
-```mermaid
 flowchart TD
     Camera["📷 Camera"] -->|Lane Detection (OpenCV)| RaspberryPi["🍓 Raspberry Pi"]
     RaspberryPi -->|Serial Commands| Arduino["🤖 Arduino Uno"]
