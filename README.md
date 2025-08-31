@@ -143,7 +143,7 @@ void loop() {
 }
 
 ```
-###2) DC Motor on L293D Shield (M1)
+### 2) DC Motor on L293D Shield (M1)
 
 Drives the M1 motor channel forward, stop, reverse, stop.
 
@@ -179,7 +179,7 @@ void loop() {
   delay(1000);
 }
 ```  
-###3) Six Ultrasonic Sensors (HC-SR04)
+### 3) Six Ultrasonic Sensors (HC-SR04)
 
 Reads Front, Back, Left, Right, Diagonal-Front-Left, Diagonal-Front-Right.
 All sensors share VCC → 5 V and GND → GND, each has its own TRIG/ECHO pins.
@@ -256,6 +256,292 @@ Motor shield pinouts: Check your shield silkscreen; some use D11/D3 for M1.
 Grounding: Arduino GND, motor shield GND, buck GND, servo GND, and sensor GND must all be connected together.
 
 Ultrasonic max range: 400 cm in the serial monitor means “no object detected.”
+
+### 4) Modular Testing Code
+This code will involve all components required to run the robot in the first round.
+
+It’s menu-driven over the Serial Monitor:
+
+Press 1 → Servo sweep test
+
+Press 2 → Motor forward/stop/reverse test
+
+Press 3 → Live ultrasonic scan (all six)
+
+Press 4 → Simple safety drive (forward, stop if front < 25 cm)
+
+Press s → Stop motor immediately
+
+Press h → Help menu
+
+```cpp
+/*
+  Modular Test Suite: Motor (L293D M1) + Servo (D10) + 6x Ultrasonic
+  - Board: Arduino Uno + Generic L293D Motor Shield
+  - Motor: M1 (AFMotor abstracts shield pins)
+  - Servo: MG996R signal on D10 (POWER FROM 5–6 V BUCK, not Arduino 5V!)
+  - Ultrasonic: 6x HC-SR04, shared 5V/GND, individual TRIG/ECHO pins
+
+  Controls (Serial Monitor @115200, "No line ending"):
+    1 : Servo sweep
+    2 : Motor test (FWD, STOP, REV)
+    3 : Ultrasonic live scan (all 6)
+    4 : Safety drive (forward; stop if front < 25 cm)
+    s : Stop motor now
+    h : Help
+*/
+
+#include <AFMotor.h>
+#include <Servo.h>
+
+// ------------------- Motor (L293D shield, M1) -------------------
+AF_DCMotor motor1(1);   // M1 port on the shield
+
+// ------------------- Servo (signal on D10) ----------------------
+Servo steering;
+const int SERVO_PIN = 10;
+const int SERVO_CENTER = 90;
+const int SERVO_SWEEP = 40; // ±40° from center
+
+// ------------------- Ultrasonic pins ----------------------------
+#define TRIG_F   2
+#define ECHO_F   4
+
+#define TRIG_B   5
+#define ECHO_B   6
+
+#define TRIG_L   7
+#define ECHO_L   8
+
+#define TRIG_R   A0   // D14
+#define ECHO_R   A1   // D15
+
+#define TRIG_DFL A2   // D16
+#define ECHO_DFL A3   // D17
+
+#define TRIG_DFR A4   // D18
+#define ECHO_DFR A5   // D19
+
+// ------------------- Modes --------------------------------------
+enum Mode : uint8_t {
+  IDLE = 0,
+  SERVO_SWEEP_MODE,
+  MOTOR_TEST_MODE,
+  ULTRA_SCAN_MODE,
+  SAFETY_DRIVE_MODE
+};
+
+Mode mode = IDLE;
+
+// ------------------- Helpers ------------------------------------
+long readDistanceCM(int trigPin, int echoPin) {
+  digitalWrite(trigPin, LOW);
+  delayMicroseconds(2);
+  digitalWrite(trigPin, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(trigPin, LOW);
+
+  unsigned long duration = pulseIn(echoPin, HIGH, 30000UL); // timeout 30ms
+  if (duration == 0) return 400; // no echo within window
+  return duration / 58;          // µs → cm
+}
+
+struct Distances {
+  long F, B, L, R, DFL, DFR;
+};
+
+Distances readAll() {
+  Distances d;
+  d.F   = readDistanceCM(TRIG_F,   ECHO_F);
+  d.B   = readDistanceCM(TRIG_B,   ECHO_B);
+  d.L   = readDistanceCM(TRIG_L,   ECHO_L);
+  d.R   = readDistanceCM(TRIG_R,   ECHO_R);
+  d.DFL = readDistanceCM(TRIG_DFL, ECHO_DFL);
+  d.DFR = readDistanceCM(TRIG_DFR, ECHO_DFR);
+  return d;
+}
+
+void printAll(const Distances& d) {
+  Serial.print("F: ");   Serial.print(d.F);   Serial.print("  ");
+  Serial.print("B: ");   Serial.print(d.B);   Serial.print("  ");
+  Serial.print("L: ");   Serial.print(d.L);   Serial.print("  ");
+  Serial.print("R: ");   Serial.print(d.R);   Serial.print("  ");
+  Serial.print("DFL: "); Serial.print(d.DFL); Serial.print("  ");
+  Serial.print("DFR: "); Serial.println(d.DFR);
+}
+
+// ------------------- Motor control wrappers ---------------------
+void motorStop() {
+  motor1.run(RELEASE);
+}
+
+void motorForward(uint8_t speed255) {
+  motor1.setSpeed(speed255);
+  motor1.run(FORWARD);
+}
+
+void motorBackward(uint8_t speed255) {
+  motor1.setSpeed(speed255);
+  motor1.run(BACKWARD);
+}
+
+// ------------------- UI -----------------------------------------
+void printHelp() {
+  Serial.println(F("\n=== Test Suite Controls ==="));
+  Serial.println(F("1 : Servo sweep"));
+  Serial.println(F("2 : Motor test (forward/stop/reverse)"));
+  Serial.println(F("3 : Ultrasonic live scan"));
+  Serial.println(F("4 : Safety drive (stop if front < 25 cm)"));
+  Serial.println(F("s : Stop motor"));
+  Serial.println(F("h : Help\n"));
+}
+
+void setMode(Mode m) {
+  mode = m;
+  switch (mode) {
+    case IDLE:               Serial.println(F("[MODE] IDLE")); break;
+    case SERVO_SWEEP_MODE:   Serial.println(F("[MODE] SERVO SWEEP")); break;
+    case MOTOR_TEST_MODE:    Serial.println(F("[MODE] MOTOR TEST")); break;
+    case ULTRA_SCAN_MODE:    Serial.println(F("[MODE] ULTRASONIC SCAN")); break;
+    case SAFETY_DRIVE_MODE:  Serial.println(F("[MODE] SAFETY DRIVE")); break;
+  }
+}
+
+// ------------------- Setup --------------------------------------
+void setup() {
+  Serial.begin(115200);
+
+  // Servo
+  steering.attach(SERVO_PIN);
+  steering.write(SERVO_CENTER);
+
+  // Motor
+  motorStop();           // ensure stopped
+  motor1.setSpeed(0);
+
+  // Ultrasonic pinModes
+  pinMode(TRIG_F, OUTPUT);   pinMode(ECHO_F, INPUT);
+  pinMode(TRIG_B, OUTPUT);   pinMode(ECHO_B, INPUT);
+  pinMode(TRIG_L, OUTPUT);   pinMode(ECHO_L, INPUT);
+  pinMode(TRIG_R, OUTPUT);   pinMode(ECHO_R, INPUT);
+  pinMode(TRIG_DFL, OUTPUT); pinMode(ECHO_DFL, INPUT);
+  pinMode(TRIG_DFR, OUTPUT); pinMode(ECHO_DFR, INPUT);
+
+  printHelp();
+  setMode(IDLE);
+}
+
+// ------------------- Mode state vars ----------------------------
+unsigned long t0 = 0;
+int sweepDir = +1;
+int servoPos = SERVO_CENTER;
+
+// For motor test steps
+uint8_t motorStep = 0;
+unsigned long motorTimer = 0;
+
+// ------------------- Loop ---------------------------------------
+void loop() {
+  // ---- Serial command handling ----
+  if (Serial.available()) {
+    char c = Serial.read();
+    if (c == '1') setMode(SERVO_SWEEP_MODE);
+    else if (c == '2') { motorStep = 0; motorTimer = 0; setMode(MOTOR_TEST_MODE); }
+    else if (c == '3') setMode(ULTRA_SCAN_MODE);
+    else if (c == '4') setMode(SAFETY_DRIVE_MODE);
+    else if (c == 's') { motorStop(); Serial.println(F("[MOTOR] STOP")); }
+    else if (c == 'h') printHelp();
+  }
+
+  // ---- Mode behaviors ----
+  switch (mode) {
+    case IDLE: {
+      // idle: keep things safe
+      motorStop();
+      steering.write(SERVO_CENTER);
+    } break;
+
+    case SERVO_SWEEP_MODE: {
+      // Non-blocking sweep: update every 20 ms
+      unsigned long now = millis();
+      if (now - t0 >= 20) {
+        t0 = now;
+        servoPos += sweepDir * 2;  // speed of sweep
+        if (servoPos >= SERVO_CENTER + SERVO_SWEEP) { servoPos = SERVO_CENTER + SERVO_SWEEP; sweepDir = -1; }
+        if (servoPos <= SERVO_CENTER - SERVO_SWEEP) { servoPos = SERVO_CENTER - SERVO_SWEEP; sweepDir = +1; }
+        steering.write(servoPos);
+      }
+    } break;
+
+    case MOTOR_TEST_MODE: {
+      // Step through: FWD 2s → STOP 1s → REV 2s → STOP 1s → repeat
+      unsigned long now = millis();
+      if (motorStep == 0) {
+        motorForward(200);
+        Serial.println(F("[MOTOR] FORWARD @200"));
+        motorTimer = now;
+        motorStep = 1;
+      } else if (motorStep == 1 && now - motorTimer >= 2000) {
+        motorStop();
+        Serial.println(F("[MOTOR] STOP"));
+        motorTimer = now;
+        motorStep = 2;
+      } else if (motorStep == 2 && now - motorTimer >= 1000) {
+        motorBackward(200);
+        Serial.println(F("[MOTOR] BACKWARD @200"));
+        motorTimer = now;
+        motorStep = 3;
+      } else if (motorStep == 3 && now - motorTimer >= 2000) {
+        motorStop();
+        Serial.println(F("[MOTOR] STOP"));
+        motorTimer = now;
+        motorStep = 4;
+      } else if (motorStep == 4 && now - motorTimer >= 1000) {
+        motorStep = 0; // loop again
+      }
+    } break;
+
+    case ULTRA_SCAN_MODE: {
+      // Print all sensor distances ~10 Hz
+      static unsigned long lastPrint = 0;
+      unsigned long now = millis();
+      if (now - lastPrint >= 100) {
+        lastPrint = now;
+        Distances d = readAll();
+        printAll(d);
+      }
+    } break;
+
+    case SAFETY_DRIVE_MODE: {
+      // Drive forward slowly; stop if front < 25 cm
+      static unsigned long lastChk = 0;
+      unsigned long now = millis();
+      if (now - lastChk >= 100) {
+        lastChk = now;
+        long f = readDistanceCM(TRIG_F, ECHO_F);
+        Serial.print(F("Front(cm): ")); Serial.println(f);
+        if (f < 25) {
+          motorStop();
+          Serial.println(F("[SAFETY] Obstacle close → STOP"));
+        } else {
+          motorForward(140); // gentle cruise
+        }
+      }
+      // Keep servo centered during this simple test
+      steering.write(SERVO_CENTER);
+    } break;
+  }
+}
+
+
+```
+/*
+  Wiring Notes:
+  - Motor: connect to M1 on L293D shield; supply 6–12 V to shield VM/EXT PWR; GND common with Arduino.
+  - Servo: D10 signal; POWER from separate 5–6 V buck (≥3–5 A). Tie buck GND to Arduino GND.
+  - Ultrasonic: All VCC → 5 V, all GND → GND. TRIG/ECHO as defined above.
+  - Common Ground: Battery –, shield GND, Arduino GND, both buck GNDs, sensor GND, servo GND MUST be common.
+*/
 
 
 ```bash
