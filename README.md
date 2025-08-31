@@ -68,14 +68,16 @@ This repository contains engineering materials of a self-driven vehicle's model 
 ## Team members
 
 Ayan Atmakuri, age 16, atmakuriayan@gmail.com 
+(Raspberry Pi Programming)
 
 Kushal Khemani, age 16, kushal.khemani@gmail.com
+(Arduino Programming, 3D Modeling, Building, PCB)
 
 ## Team Photos
 
 <img src="https://github.com/ayan-atm/WRO_FE_2025-26/raw/main/t-photos/Official%20Picture.jpeg" width="40%" height="40%"> <img src="https://github.com/ayan-atm/WRO_FE_2025-26/raw/main/t-photos/Funny%20Picture.png" width="40%" height="40%">
 
-Ayan Atmakuri (Purple shirt), Kushal Khemani (Grey and green shirt)
+Ayan Atmakuri (Purple shirt), Kushal Khemani (Grey shirt with green collar)
 
 ##  Quick Overview
 
@@ -108,7 +110,153 @@ The design leverages a **Raspberry Pi** for high-level perception and decision-m
    - Car autonomously navigates laps, avoids obstacles, obeys color-based passing rules, executes turnarounds, and completes vision-guided parallel parking.
 
 
-##  Running the System
+## Unit Testing 🛠️
+
+These are standalone Arduino sketches to test individual subsystems (servo, motor, ultrasonic sensors) before integrating them together.  
+Each can be copied into the Arduino IDE and uploaded separately.
+
+### 1) Servo Sweep (D9)
+
+Moves the steering **servo** smoothly from 0°→180°→0°.  
+⚠️ **Important:** MG996R needs its own 5–6 V supply (≥3 A). Do not power from the Arduino 5 V pin.
+
+```cpp
+#include <Servo.h>
+
+Servo myServo;
+
+void setup() {
+  myServo.attach(9);   // Servo signal on D9 (power from external 5–6 V)
+}
+
+void loop() {
+  // Sweep 0° -> 180°
+  for (int pos = 0; pos <= 180; pos += 5) {
+    myServo.write(pos);
+    delay(50);
+  }
+  // Sweep back 180° -> 0°
+  for (int pos = 180; pos >= 0; pos -= 5) {
+    myServo.write(pos);
+    delay(50);
+  }
+}
+
+```
+###2) DC Motor on L293D Shield (M1)
+
+Drives the M1 motor channel forward, stop, reverse, stop.
+
+Note: generic L293D shields vary. This code assumes M1_DIR on D12 and M1_PWM on D3.
+If your shield uses different pins, update the defines.
+```cpp
+// Test Motor at M1 on L293D Shield
+int M1_DIR = 12;  // Direction pin for M1 (check your shield!)
+int M1_PWM = 3;   // PWM pin for M1 speed
+
+void setup() {
+  pinMode(M1_DIR, OUTPUT);
+  pinMode(M1_PWM, OUTPUT);
+}
+
+void loop() {
+  // Forward
+  digitalWrite(M1_DIR, HIGH);
+  analogWrite(M1_PWM, 200);  // Speed (0-255)
+  delay(2000);
+
+  // Stop
+  analogWrite(M1_PWM, 0);
+  delay(1000);
+
+  // Reverse
+  digitalWrite(M1_DIR, LOW);
+  analogWrite(M1_PWM, 200);
+  delay(2000);
+
+  // Stop
+  analogWrite(M1_PWM, 0);
+  delay(1000);
+}
+```  
+###3) Six Ultrasonic Sensors (HC-SR04)
+
+Reads Front, Back, Left, Right, Diagonal-Front-Left, Diagonal-Front-Right.
+All sensors share VCC → 5 V and GND → GND, each has its own TRIG/ECHO pins.
+```cpp
+// ------------------- Pin mappings -------------------
+#define TRIG_F   2
+#define ECHO_F   4
+
+#define TRIG_B   5
+#define ECHO_B   6
+
+#define TRIG_L   7
+#define ECHO_L   8
+
+#define TRIG_R   A0   // D14
+#define ECHO_R   A1   // D15
+
+#define TRIG_DFL A2   // D16
+#define ECHO_DFL A3   // D17
+
+#define TRIG_DFR A4   // D18
+#define ECHO_DFR A5   // D19
+// -----------------------------------------------------
+
+long readDistance(int trigPin, int echoPin) {
+  digitalWrite(trigPin, LOW);
+  delayMicroseconds(2);
+  digitalWrite(trigPin, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(trigPin, LOW);
+
+  unsigned long duration = pulseIn(echoPin, HIGH, 30000UL); // 30 ms timeout
+  if (duration == 0) return 400; // no echo → max range
+  return duration / 58;          // convert µs to cm
+}
+
+void setup() {
+  Serial.begin(115200);
+
+  pinMode(TRIG_F, OUTPUT);   pinMode(ECHO_F, INPUT);
+  pinMode(TRIG_B, OUTPUT);   pinMode(ECHO_B, INPUT);
+  pinMode(TRIG_L, OUTPUT);   pinMode(ECHO_L, INPUT);
+  pinMode(TRIG_R, OUTPUT);   pinMode(ECHO_R, INPUT);
+  pinMode(TRIG_DFL, OUTPUT); pinMode(ECHO_DFL, INPUT);
+  pinMode(TRIG_DFR, OUTPUT); pinMode(ECHO_DFR, INPUT);
+
+  Serial.println("Ultrasonic Test: F, B, L, R, DFL, DFR");
+}
+
+void loop() {
+  long distF   = readDistance(TRIG_F,   ECHO_F);
+  long distB   = readDistance(TRIG_B,   ECHO_B);
+  long distL   = readDistance(TRIG_L,   ECHO_L);
+  long distR   = readDistance(TRIG_R,   ECHO_R);
+  long distDFL = readDistance(TRIG_DFL, ECHO_DFL);
+  long distDFR = readDistance(TRIG_DFR, ECHO_DFR);
+
+  Serial.print("F: ");   Serial.print(distF);   Serial.print("  ");
+  Serial.print("B: ");   Serial.print(distB);   Serial.print("  ");
+  Serial.print("L: ");   Serial.print(distL);   Serial.print("  ");
+  Serial.print("R: ");   Serial.print(distR);   Serial.print("  ");
+  Serial.print("DFL: "); Serial.print(distDFL); Serial.print("  ");
+  Serial.print("DFR: "); Serial.println(distDFR);
+
+  delay(100);
+}
+```  
+⚠️ Notes & Gotchas
+
+Servo power: MG996R is high-torque; use a separate 5–6 V buck (≥3–5 A).
+
+Motor shield pinouts: Check your shield silkscreen; some use D11/D3 for M1.
+
+Grounding: Arduino GND, motor shield GND, buck GND, servo GND, and sensor GND must all be connected together.
+
+Ultrasonic max range: 400 cm in the serial monitor means “no object detected.”
+
 
 ```bash
 cd src/
