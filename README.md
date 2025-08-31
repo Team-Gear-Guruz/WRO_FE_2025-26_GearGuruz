@@ -30,15 +30,15 @@ This repository contains engineering materials of a self-driven vehicle's model 
 | Arduino Uno              | 1        | Low-level controller for motor + steering (PWM + servo)|
 | L293D / TB6612 Driver    | 1        | Motor driver IC for DC motor control                   |
 | DC Gear Motor            | 1        | Rear wheel drive motor                                 |
-| Servo Motor (SG90/MG90S) | 1        | Steering actuator (mounted on front axle)              |
+| Servo Motor (MG996R)     | 1        | Steering actuator (mounted on front axle)              |
 | HC-SR04 Ultrasonic Sensor| 6        | Obstacle detection (front, back, left, right, FL, FR)  |
-| Li-on Battery 12V| 1     | Power source for electronics and motors                |
+| Li-on Battery 12V        | 1        | Power source for electronics and motors                |
 | Motor Mounts / Chassis   | 1 set    | 3D-printed chassis parts + mounts                      |
 | Wheels + Tires           | 2–4      | Drive + steering wheels                                |
 | Wires, Jumper cables     | —        | Connections between Pi, Arduino, sensors, and driver   |
 | Breadboard / PCB         | 1        | For stable wiring and connections                      |
 | Camera (Pi Camera / USB) | 1        | Used by Raspberry Pi for lane + obstacle detection     |
-| Motor 12v DC | 1        | For Moving the robot (connected to single axle)     |
+| Motor 12v DC             | 1        | For Moving the robot (connected to single axle)     |
 
 <!-- Parts Gallery -->
 <h2> Photos of parts</h2>
@@ -91,9 +91,9 @@ A vision-guided mini-vehicle using:
 
 This repository hosts the software and wiring for an autonomous robot car built for the **World Robot Olympiad 2025 – Future Engineers Challenge**.
 
-The design leverages a **Raspberry Pi** for high-level perception and decision-making—handling lane detection, obstacle avoidance, color-coded behavior (e.g., pass red on the right, green on the left), and vision-guided parking—while an **Arduino Uno** handles real-time actuation of the DC drive motor and steering servo based on those decisions.
+The design leverages a **Raspberry Pi** for high-level perception and decision-making—handling lane detection, obstacle avoidance, color-coded behavior (e.g., pass red on the right, green on the left), and vision-guided parking—while an **Arduino Uno** handles real-time actuation of the DC drive motor and steering servo based on those decisions. This documentation provided a step-by-step process on how you can implement your own robot.
 
-### System Workflow
+### System Workflow - We use this to set ground rules
 
 1. **Vision & Perception (Raspberry Pi)**  
    - Captures camera frames and processes them for road lanes, colored markers, and parking bays.  
@@ -108,11 +108,9 @@ The design leverages a **Raspberry Pi** for high-level perception and decision-m
 4. **Real World Performance**  
    - Car autonomously navigates laps, avoids obstacles, obeys color-based passing rules, executes turnarounds, and completes vision-guided parallel parking.
 
-Thanks! Here's the updated **Mobility Management** section tailored to your actual hardware:
+_**NOTE**_ From Kushal Khemani - This robot was made in less than 3 weeks (due to school examinations and SAT prep for both team members).
 
----
-
-## 1. Mobility Management
+## 1. Mobility Management - finding what suits best 
 
 Our vehicle’s mobility system has been engineered for robust, stable navigation across both Open and Obstacle Challenges in WRO 2025. The setup balances power, control precision, and sensor integration using reliable, competition-grade components.
 
@@ -169,7 +167,7 @@ The mounting design ensures:
 Failsafe routines in the software monitor obstacle proximity. If all sensor readings drop below safe limits, the car **automatically reverses and adjusts angle** to prevent collision or deadlock.
 
 
-## 2. Power and Sense Management
+## 2. Power and Sense Management - tring to be energy efficient
 
 To enable robust autonomous operation across both the Open and Obstacle Challenges, our power and sensing systems were designed to be modular, efficient, and fail-safe. Key design goals included isolating high-power and logic domains, ensuring consistent voltage supply for sensitive components, and providing wide-angle situational awareness through sensor fusion.
 
@@ -230,18 +228,18 @@ These sensors were selected based on:
 All sensors operate on 5V logic. Since each sensor draws minimal current, they are powered directly from the Arduino 5V output. The servo's power-hungry nature warranted a dedicated 5V supply via buck converter to avoid interference.
 
 
-## 3. Obstacle Management
+## 3. Obstacle Management - the main challenge
 
 Obstacle management in our self-driving vehicle focuses on real-time detection, decision-making, and recovery strategies to navigate both static and dynamic obstacles with minimal latency and high reliability.
 
-We use a **hybrid approach**:
+The only solution - a **hybrid approach**:
 
 * **Ultrasonic sensors (Arduino-controlled)** for reactive proximity-based obstacle avoidance
 * **Camera + Raspberry Pi (OpenCV)** for computer vision tasks such as detecting stop signs, colored zones, and “No Entry” paths
 
 ---
 
-### Strategy Overview
+### Strategy Overview - what we found after a few long discussions
 
 #### **Open Challenge (Arduino-only):**
 
@@ -261,7 +259,7 @@ We use a **hybrid approach**:
 
 ---
 
-### Flow Diagram
+### Flow Diagram - easy to interpret
 
 ```
 [Start]
@@ -288,7 +286,7 @@ We use a **hybrid approach**:
 
 ---
 
-### Pseudocode (Obstacle Challenge)
+### Pseudocode (Obstacle Challenge) - we learnt this last year
 
 ```plaintext
 Start
@@ -309,7 +307,7 @@ Start
 
 ---
 
-### Arduino Code Snippet (Obstacle Handling Logic)
+### Arduino Code Snippet (Obstacle Handling Logic) - OOP
 
 // Inside loop()
 
@@ -342,13 +340,13 @@ if (distFC < 12) {
 
 The Pi runs OpenCV-based code to:
 
-* Detect red STOP signs
+* Detect red signs
 * Recognize arrows for directional instructions
-* Identify colored zones (blue, yellow, red) using HSV masks
+* Identify colored zones using HSV masks
 
 After classification, the Pi sends command signals to Arduino via serial:
 
-* `"STOP"`, `"LEFT"`, `"RIGHT"`, `"ZONE_RED"`, etc.
+* `"STOP"`, `"LEFT"`, `"RIGHT"`, etc.
 
 The Arduino interprets these and adjusts movement accordingly.
 
@@ -359,12 +357,13 @@ The Arduino interprets these and adjusts movement accordingly.
 * **No echo recovery**: If no echo is received from a sensor for more than 3 reads, the car slows down and centers.
 * **Stuck detection**: If the car hasn't moved in distance (based on rear sensors), it reverses for 1 second and retries.
 * **Soft timeout**: If a lap takes longer than 2 minutes, the system logs an alert.
+* **Reversing**: The car reverses if it is less than 15 cm from an obstacle.
 
 
 
+# Arduino Pin Mapping for Self-Driving Car (WRO 2025) 
 
-
-# Arduino Pin Mapping for Self-Driving Car (WRO 2025)
+**This is what we decided upon...**
 
 ### 🔧 Motor (M1 via L293D Shield)
 - **Speed (PWM):** `D11`  
@@ -394,6 +393,7 @@ Each can be copied into the Arduino IDE and uploaded separately.
 
 Moves the steering **servo** smoothly from 0°→180°→0°.  
 ⚠️ **Important:** MG996R needs its own 5–6 V supply (≥3 A). Do not power from the Arduino 5 V pin.
+Errors I made - did not use a buck converter to supply constant voltage and amps. This caused stuttering in the steering.
 
 ```cpp
 #include <Servo.h>
@@ -424,6 +424,7 @@ Drives the M1 motor channel forward, stop, reverse, stop.
 
 Note: generic L293D shields vary. This code assumes M1_DIR on D12 and M1_PWM on D3.
 If your shield uses different pins, update the defines.
+Errors I made - used the pins on the arduino that the motor shield was dependent on.
 ```cpp
 // Test Motor at M1 on L293D Shield
 int M1_DIR = 12;  // Direction pin for M1 (check your shield!)
@@ -458,6 +459,7 @@ void loop() {
 
 Reads Front, Back, Left, Right, Diagonal-Front-Left, Diagonal-Front-Right.
 All sensors share VCC → 5 V and GND → GND, each has its own TRIG/ECHO pins.
+Errors I made - connecting the trig pins in one digital pin (for sequential reading). This made the program complex and led to crashing.
 ```cpp
 // ------------------- Pin mappings -------------------
 #define TRIG_F   2
@@ -522,7 +524,7 @@ void loop() {
   delay(100);
 }
 ```  
-⚠️ Notes & Gotchas
+⚠️ Gotchas
 
 Servo power: MG996R is high-torque; use a separate 5–6 V buck (≥3–5 A).
 
@@ -532,7 +534,7 @@ Grounding: Arduino GND, motor shield GND, buck GND, servo GND, and sensor GND mu
 
 Ultrasonic max range: 400 cm in the serial monitor means “no object detected.”
 
-### 4) Modular Testing Code
+### 4) Modular Testing Code - because why not.
 This code will involve all components required to run the robot in the first round.
 
 It’s menu-driven over the Serial Monitor:
@@ -1028,7 +1030,7 @@ Uses distance from the left wall to steer the car.
 
 ---
 
-## 📷 Optional Enhancements
+## Optional Enhancements
 
 * Add line sensors or camera for finish line detection
 * Use PID for better steering control
@@ -1221,7 +1223,7 @@ void loop() {
 
 
 ```
-
+##**This is where the Arduino part ends.**
 ```bash
 cd src/
 python3 wro.py sim                      # Run in simulator
