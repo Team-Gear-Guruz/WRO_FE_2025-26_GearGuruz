@@ -3,19 +3,6 @@ Engineering materials
 
 This repository contains engineering materials of a self-driven vehicle's model participating in the WRO Future Engineers competition in the season 2022.
 
-## Content
-
-* `t-photos` Team photos (includes one official group photo and one funny team photo).
-* `v-photos` Vehicle photos (6 angles: front, back, sides, top, bottom).
-* `video` contains a link to our driving demonstration video
-* `schemes` Schematic diagrams of the electromechanical system (motors, sensors, controllers, wiring).
-* `src` Source code for the vehicle:
-* 
-        Python (Raspberry Pi) → Vision, lane following, obstacle avoidance, parking logic.
-        Arduino → Motor + servo bridge (serial protocol for PWM and steering).
-* `models` 3D printing, laser cutting, and CNC files for chassis and mechanical components.
-* `other` Documentation, datasets, hardware specs, and supporting materials for preparing the vehicle.
-
 ## Content of Repository
 
 | Folder     | Description |
@@ -49,7 +36,10 @@ This repository contains engineering materials of a self-driven vehicle's model 
 
 ## Parts photos
 
-
+<img src="https://github.com/ayan-atm/WRO_FE_2025-26/blob/main/others/PCB.jpeg" width="40%" height="40%">
+<img src="https://github.com/ayan-atm/WRO_FE_2025-26/blob/main/others/Ball bearing 1.jpg" width="40%" height="40%">
+<img src="https://github.com/ayan-atm/WRO_FE_2025-26/blob/main/others/Ball bearing 2.jpg" width="40%" height="40%">
+<img src="https://github.com/ayan-atm/WRO_FE_2025-26/blob/main/others/Motor Shield.webp" width="40%" height="40%">
 
 ## Team members
 
