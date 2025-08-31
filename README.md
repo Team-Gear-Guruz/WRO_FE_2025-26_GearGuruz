@@ -33,12 +33,13 @@ This repository contains engineering materials of a self-driven vehicle's model 
 | DC Gear Motor            | 1        | Rear wheel drive motor                                 |
 | Servo Motor (SG90/MG90S) | 1        | Steering actuator (mounted on front axle)              |
 | HC-SR04 Ultrasonic Sensor| 6        | Obstacle detection (front, back, left, right, FL, FR)  |
-| Li-Po Battery (3.7V 2000mAh)| 1     | Power source for electronics and motors                |
+| Li-on Battery 12V| 1     | Power source for electronics and motors                |
 | Motor Mounts / Chassis   | 1 set    | 3D-printed chassis parts + mounts                      |
 | Wheels + Tires           | 2–4      | Drive + steering wheels                                |
 | Wires, Jumper cables     | —        | Connections between Pi, Arduino, sensors, and driver   |
 | Breadboard / PCB         | 1        | For stable wiring and connections                      |
 | Camera (Pi Camera / USB) | 1        | Used by Raspberry Pi for lane + obstacle detection     |
+| Motor 12v DC | 1        | For Moving the robot (connected to single axle)     |
 
 <!-- Parts Gallery -->
 <h2> Photos of parts</h2>
@@ -87,21 +88,25 @@ A vision-guided mini-vehicle using:
 
 ## Introduction
 
-Our vehicle is driven by a Raspberry Pi (vision and AI brain) and an Arduino (motor + servo controller).
+This repository hosts the software and wiring for an autonomous robot car built for the **World Robot Olympiad 2025 – Future Engineers Challenge**.
 
-The Raspberry Pi runs Python code for perception (lane detection, obstacle recognition, parking detection) and decision-making (PD control, lap tracking, state machines).
+The design leverages a **Raspberry Pi** for high-level perception and decision-making—handling lane detection, obstacle avoidance, color-coded behavior (e.g., pass red on the right, green on the left), and vision-guided parking—while an **Arduino Uno** handles real-time actuation of the DC drive motor and steering servo based on those decisions.
 
-The Arduino receives high-level commands (motor PWM, steering servo microseconds) over serial and translates them into signals for the motor driver (L293/TB6612) and the steering servo.
+### System Workflow
 
-The workflow:
+1. **Vision & Perception (Raspberry Pi)**  
+   - Captures camera frames and processes them for road lanes, colored markers, and parking bays.  
+   - Runs a state machine with PD control logic, lap counting, and parking alignment commands.
 
-Raspberry Pi captures camera feed → processes lane + obstacle data.
+2. **Control Communication**  
+   - Sends steering (e.g., servo angle) and throttle (motor PWM) commands via serial to the Arduino.
 
-Control logic generates steering and throttle signals.
+3. **Motion Execution (Arduino)**  
+   - Receives commands and outputs PWM for the motor driver (L293D/TB6612) and servo control for steering.
 
-Arduino executes commands → drives motors and steering servo.
+4. **Real World Performance**  
+   - Car autonomously navigates laps, avoids obstacles, obeys color-based passing rules, executes turnarounds, and completes vision-guided parallel parking.
 
-This integration allowed the vehicle to complete laps, handle obstacles, turn around when needed, and finish with vision-guided parking.
 
 ##  Running the System
 
