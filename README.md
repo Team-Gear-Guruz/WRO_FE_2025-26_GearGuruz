@@ -46,7 +46,7 @@ This repository contains engineering materials of a self-driven vehicle's model 
 <table>
   <tr>
     <td align="center">
-      <img src="other/PCB.jpeg" width="220" alt="PCB"><br/>
+      <img src="other/PCB.jpeg" width="220" alt="PCB_New"><br/>
       <sub><b>PCB</b></sub>
     </td>
     <td align="center">
