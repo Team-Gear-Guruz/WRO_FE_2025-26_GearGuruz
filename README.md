@@ -462,67 +462,64 @@ All sensors share VCC → 5 V and GND → GND, each has its own TRIG/ECHO pins.
 Errors I made - connecting the trig pins in one digital pin (for sequential reading). This made the program complex and led to crashing.
 ```cpp
 // ------------------- Pin mappings -------------------
-#define TRIG_F   2
-#define ECHO_F   4
+// ---- Ultrasonic Sensors ----
+struct Ultrasonic {
+  uint8_t trigPin;
+  uint8_t echoPin;
+  const char* name;
+};
 
-#define TRIG_B   5
-#define ECHO_B   6
+// Define all sensors with mapping
+Ultrasonic sensors[] = {
+  {2,  A0, "Front-Center"},
+  {3,  A1, "Front-Left Diagonal"},
+  {5,  A2, "Front-Right Diagonal"},
+  {6,  A3, "Left"},
+  {10, A4, "Right"},
+  {13, A5, "Back"}
+};
 
-#define TRIG_L   7
-#define ECHO_L   8
-
-#define TRIG_R   A0   // D14
-#define ECHO_R   A1   // D15
-
-#define TRIG_DFL A2   // D16
-#define ECHO_DFL A3   // D17
-
-#define TRIG_DFR A4   // D18
-#define ECHO_DFR A5   // D19
-// -----------------------------------------------------
-
-long readDistance(int trigPin, int echoPin) {
+long getDistance(uint8_t trigPin, uint8_t echoPin) {
+  // Send trigger pulse
   digitalWrite(trigPin, LOW);
   delayMicroseconds(2);
   digitalWrite(trigPin, HIGH);
   delayMicroseconds(10);
   digitalWrite(trigPin, LOW);
 
-  unsigned long duration = pulseIn(echoPin, HIGH, 30000UL); // 30 ms timeout
-  if (duration == 0) return 400; // no echo → max range
-  return duration / 58;          // convert µs to cm
+  // Read echo time
+  long duration = pulseIn(echoPin, HIGH, 20000); // timeout = 20ms (~3.4m range)
+
+  // Convert to distance in cm
+  long distance = duration * 0.034 / 2;
+  return distance;
 }
 
 void setup() {
-  Serial.begin(115200);
+  Serial.begin(9600);
 
-  pinMode(TRIG_F, OUTPUT);   pinMode(ECHO_F, INPUT);
-  pinMode(TRIG_B, OUTPUT);   pinMode(ECHO_B, INPUT);
-  pinMode(TRIG_L, OUTPUT);   pinMode(ECHO_L, INPUT);
-  pinMode(TRIG_R, OUTPUT);   pinMode(ECHO_R, INPUT);
-  pinMode(TRIG_DFL, OUTPUT); pinMode(ECHO_DFL, INPUT);
-  pinMode(TRIG_DFR, OUTPUT); pinMode(ECHO_DFR, INPUT);
+  // Initialize pins
+  for (auto &s : sensors) {
+    pinMode(s.trigPin, OUTPUT);
+    pinMode(s.echoPin, INPUT);
+  }
 
-  Serial.println("Ultrasonic Test: F, B, L, R, DFL, DFR");
+  Serial.println("Ultrasonic Sensor Test Started...");
 }
 
 void loop() {
-  long distF   = readDistance(TRIG_F,   ECHO_F);
-  long distB   = readDistance(TRIG_B,   ECHO_B);
-  long distL   = readDistance(TRIG_L,   ECHO_L);
-  long distR   = readDistance(TRIG_R,   ECHO_R);
-  long distDFL = readDistance(TRIG_DFL, ECHO_DFL);
-  long distDFR = readDistance(TRIG_DFR, ECHO_DFR);
+  for (auto &s : sensors) {
+    long d = getDistance(s.trigPin, s.echoPin);
+    Serial.print(s.name);
+    Serial.print(": ");
+    if (d == 0) Serial.println("Out of range");
+    else Serial.print(d), Serial.println(" cm");
+  }
 
-  Serial.print("F: ");   Serial.print(distF);   Serial.print("  ");
-  Serial.print("B: ");   Serial.print(distB);   Serial.print("  ");
-  Serial.print("L: ");   Serial.print(distL);   Serial.print("  ");
-  Serial.print("R: ");   Serial.print(distR);   Serial.print("  ");
-  Serial.print("DFL: "); Serial.print(distDFL); Serial.print("  ");
-  Serial.print("DFR: "); Serial.println(distDFR);
-
-  delay(100);
+  Serial.println("--------------------");
+  delay(500); // wait before next reading
 }
+
 ```  
 ⚠️ Gotchas
 
