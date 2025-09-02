@@ -1481,7 +1481,7 @@ If you want to edit files locally and upload automatically:
 3. Every time you save locally, it uploads to the Pi automatically.
 
 # Unit Testing For Raspberry Pi
-# 1) Camera Testing File
+### 1) Camera Testing File
 ```py
 from picamera2 import Picamera2
 import cv2
@@ -1502,7 +1502,65 @@ while True:
 cv2.destroyAllWindows()
 
 ```
+### 2) Using Raspberry Pi to output to Arduino
 
+```ccd
+#include <AFMotor.h>   // For L293D motor shield
+#include <Servo.h>
+
+AF_DCMotor motor(1);   // Motor connected to M1 on L293D shield
+Servo steering;        // Steering servo
+
+// Servo center values (adjust for your robot’s alignment)
+const int SERVO_CENTER = 90;
+const int SERVO_LEFT   = 60;
+const int SERVO_RIGHT  = 120;
+
+void setup() {
+  Serial.begin(115200);
+  motor.setSpeed(0);
+  motor.run(RELEASE);
+
+  steering.attach(9);       // Servo signal pin
+  steering.write(SERVO_CENTER);  // Center on startup
+}
+
+void loop() {
+  if (Serial.available()) {
+    String cmd = Serial.readStringUntil('\n');  // Read line
+    cmd.trim();
+
+    // --- Motor control ---
+    if (cmd.startsWith("M")) {
+      int spd = cmd.substring(2).toInt();  // Example: "M 180"
+      spd = constrain(spd, 0, 255);
+      motor.setSpeed(spd);
+      motor.run(FORWARD);
+    }
+
+    else if (cmd == "STOP") {
+      motor.setSpeed(0);
+      motor.run(RELEASE);
+    }
+
+    // --- Steering control ---
+    else if (cmd.startsWith("S")) {
+      int angle = cmd.substring(2).toInt();  // Example: "S 120"
+      angle = constrain(angle, 60, 120);     // protect servo range
+      steering.write(angle);
+    }
+
+    else if (cmd == "LEFT") {
+      steering.write(SERVO_LEFT);
+    }
+
+    else if (cmd == "RIGHT") {
+      steering.write(SERVO_RIGHT);
+    }
+  }
+}
+
+```
 ```bash
 cd src/
 python3 wro.py sim                      # Run in simulator
