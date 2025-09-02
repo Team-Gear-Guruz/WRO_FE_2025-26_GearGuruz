@@ -1504,7 +1504,7 @@ cv2.destroyAllWindows()
 ```
 ### 2) Using Raspberry Pi to output to Arduino
 
-```ccd
+```cpp
 #include <AFMotor.h>   // For L293D motor shield
 #include <Servo.h>
 
