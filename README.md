@@ -382,7 +382,7 @@ The Arduino interprets these and adjusts movement accordingly.
 > Trigger lines are assigned to available digital pins.
 
 
-# Unit Testing 
+# Unit Testing For Arduino
 
 These are standalone Arduino sketches to test individual subsystems (servo, motor, ultrasonic sensors) before integrating them together.  
 Each can be copied into the Arduino IDE and uploaded separately.
@@ -1480,9 +1480,28 @@ If you want to edit files locally and upload automatically:
 2. Configure it with your Pi’s IP, username `pi`, password `raspberry`.
 3. Every time you save locally, it uploads to the Pi automatically.
 
+# Unit Testing For Raspberry Pi
+# 1) Camera Testing File
+```py
+from picamera2 import Picamera2
+import cv2
 
+picam2 = Picamera2()
+picam2.preview_configuration.main.size = (640, 480)
+picam2.preview_configuration.main.format = "RGB888"
+picam2.configure("preview")
 
+picam2.start()
 
+while True:
+    frame = picam2.capture_array()
+    cv2.imshow("Camera", frame)
+    if cv2.waitKey(1) & 0xFF == ord('q'):
+        break
+
+cv2.destroyAllWindows()
+
+```
 
 ```bash
 cd src/
