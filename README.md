@@ -26,7 +26,7 @@ This repository contains engineering material of a self-driven vehicle's model p
 
 | Component                | Quantity | Description / Role                                     |
 |--------------------------|----------|--------------------------------------------------------|
-| Raspberry Pi 4 (or 3B+)  | 1        | Main controller, runs Python + OpenCV vision + logic   |
+| Raspberry Pi 3B+ (or 4)  | 1        | Main controller, runs Python + OpenCV vision + logic   |
 | Arduino Uno              | 1        | Low-level controller for motor + steering (PWM + servo)|
 | L293D / TB6612 Driver    | 1        | Motor driver IC for DC motor control                   |
 | DC Gear Motor            | 1        | Rear wheel drive motor                                 |
