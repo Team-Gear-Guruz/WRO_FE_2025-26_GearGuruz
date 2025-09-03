@@ -392,7 +392,7 @@ Each can be copied into the Arduino IDE and uploaded separately.
 ### 1) Servo Sweep (D9)
 
 Moves the steering **servo** smoothly from 0°→180°→0°.  
-⚠️ **Important:** MG996R needs its own 5–6 V supply (≥3 A). Do not power from the Arduino 5 V pin.
+**Important:** MG996R needs its own 5–6 V supply (≥3 A). Do not power from the Arduino 5 V pin.
 Errors I made - did not use a buck converter to supply constant voltage and amps. This caused stuttering in the steering.
 
 ```cpp
@@ -521,7 +521,7 @@ void loop() {
 }
 
 ```  
-⚠️ Gotchas
+🥳 Gotchas
 
 Servo power: MG996R is high-torque; use a separate 5–6 V buck (≥3–5 A).
 
@@ -966,7 +966,7 @@ void loop() {
   long distR = readDistance(TRIG_R, ECHO_R);
 ```
 
-#### 🚩 Lap Detection Logic
+#### Lap Detection Logic
 
 This logic ensures that a lap is only counted when the robot passes through a specific condition: wall ahead but no left wall.
 
@@ -983,7 +983,7 @@ This logic ensures that a lap is only counted when the robot passes through a sp
   }
 ```
 
-#### 🧭 Wall-Following Steering
+#### Wall-Following Steering
 
 Uses distance from the left wall to steer the car.
 
@@ -999,7 +999,7 @@ Uses distance from the left wall to steer the car.
   moveForward();  // Keep moving
 ```
 
-#### 🛑 Stop After 3 Laps
+#### Stop After 3 Laps
 
 ```cpp
   if (lapCount >= 3) {
@@ -1016,7 +1016,7 @@ Uses distance from the left wall to steer the car.
 
 ---
 
-## 🛠️ Customization Tips
+## Customization Tips
 
 | Goal                       | What to Adjust                         |
 | -------------------------- | -------------------------------------- |
@@ -1772,7 +1772,7 @@ Uncomment a horizontal flip:
 You can bench the Pi without a robot using a tiny Python script that prints `RDY`, then echos back whatever the Pi sends. Ask and I’ll drop it in as `tools/serial_echo.py`.
 
 
-# Raspberry Pi Code -  Obstacle Challenge
+# 🏁 Raspberry Pi Code -  Obstacle Challenge
 ```python
 #!/usr/bin/env python3
 """
@@ -2191,7 +2191,7 @@ def main():
 if __name__ == "__main__":
     main()
 ```
-# Arduino Code -  Obstacle Challenge
+# 🏁 Arduino Code -  Obstacle Challenge
 
 Here’s the TL;DR of what that Arduino sketch does:
 
