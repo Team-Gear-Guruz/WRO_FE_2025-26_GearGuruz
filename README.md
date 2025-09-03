@@ -2191,9 +2191,569 @@ def main():
 if __name__ == "__main__":
     main()
 ```
+# Arduino Code -  Obstacle Challenge
+
+Here’s the TL;DR of what that Arduino sketch does:
+
+### Roles & I/O
+
+* **Drives the robot**: controls the DC motor (Adafruit Motor Shield v1, M1) and the steering **servo on D9**.
+* **Reads 6 ultrasonics** (HC-SR04):
+  FC(2/A0), FLD(3/A1), FRD(5/A2), L(6/A3), R(10/A4), B(13/A5).
+* **Talks to the Raspberry Pi over serial (115200)** and follows its high-level hints.
+
+### Serial protocol (what it accepts)
+
+* `GO` – acknowledge start (stays idle until a MODE arrives).
+* `MODE RACE` – race/obstacle driving.
+* `MODE PARK` – take over and execute the full parking sequence.
+* `DRIVE <offset> <speed>` – lane offset `[-1..+1]` and speed hint `0..255`.
+* `KEEP LEFT` / `KEEP RIGHT` – temporary bias (≈450 ms) to the left/right.
+* `HB` – heartbeat (used only to keep watchdog happy).
+* `STOP` – immediate emergency stop.
+
+On boot it **prints `RDY`** so the Pi knows it’s ready.
+
+### Safety & watchdog
+
+* **RX watchdog** (≈400 ms): if the Pi goes silent, it stops the motor and centers the steering.
+* **Immediate obstacle stops**:
+
+  * If **front-center** < 15 cm → stop, reverse briefly, and arc away.
+  * If **hard block** (<14 cm) ahead or both diagonals are very close → same avoidance.
+* All reversing/avoid is done **locally** (Arduino), independent of the Pi.
+
+### RACE mode (line following + obstacle avoidance)
+
+* Uses the Pi’s `DRIVE offset` as the **base steering** (offset × max-steer).
+* Adds a **potential-field** term from ultrasonics:
+
+  * FC/diagonals/side/back distances repel the robot away from obstacles.
+  * PD control on the lateral field for smoother steering (KP/KD tunables).
+* Applies a brief **KEEP bias** (±8°) when `KEEP LEFT/RIGHT` is received.
+* Speed:
+
+  * Starts from Pi’s `speed` hint.
+  * **Clamped by forward clearance** (maps clearance to min/base speed).
+  * Extra slow-down if the field strongly “pushes back”.
+
+### PARK mode (fully on Arduino, ultrasonic only)
+
+State machine:
+
+1. **PARK\_ALIGN** – make the car **parallel to the side wall**
+   (balance L vs R distances using slow nudges and small steering).
+2. **PARK\_ENTER** – **reverse with right lock** to slip into the lot
+   (until back or right side gets “near”).
+3. **PARK\_STRAIGHTEN** – counter-steer while reversing a bit to straighten.
+4. **PARK\_CENTER** – small forward/back nudges to center between **front** and **back** walls.
+5. **PARK\_HOLD** – stop, steering centered; ignore further DRIVE hints.
+
+Each phase has **timeouts** and conservative thresholds to avoid touching boundaries.
+
+### Steering & drive details
+
+* **Servo**: microsecond control around 1500 µs; ±60° limit; \~11 µs/° (tunable).
+* **Motor**: forward/back via Motor Shield M1; polarity invert option if wiring flips direction.
+* **Loop cadence** ≈ 20 ms for smooth servo updates and responsive control.
+* **Filtering**: exponential smoothing (α=0.2) on all six distance readings.
+
+### Tuning knobs (quick ones)
+
+* Steering gains: `KP_STEER`, `KD_STEER`, `MAX_STEER_DEG`.
+* Speed policy: `BASE_SPEED`, `MIN_SPEED`, `CLEAR_*_CM`.
+* Safety thresholds: `FRONT_STOP_CM`, `HARD_BLOCK_CM`.
+* Parking thresholds: `ALIGN_TOL_CM`, `ENTER_*_CM`, `CENTER_*_CM`.
+* Hints: `HINT_BIAS_MS` (duration) and bias magnitude (±8° in code).
+
+### Minimal console behavior
+
+* On boot: prints **`RDY`**.
+* (Optional debug prints are in the code, commented out; you can enable them to see distances, mode, and commands.)
 
 
+FULL CODE ( WITH TWEEKS) - 
+```cpp
+/*
+  WRO 2025 – Obstacle Challenge (Arduino)
+  - Motors & steering on Arduino
+  - Six HC-SR04 ultrasonics for safety + full parking
+  - High-level hints from Raspberry Pi over Serial:
+      GO, MODE RACE|PARK, DRIVE <offset> <speed>, KEEP LEFT|RIGHT, HB, STOP
 
+  Hardware:
+    - Adafruit Motor Shield v1 (L293D), DC Motor on M1
+    - MG996R (or similar) steering servo on D9
+    - 6x HC-SR04: FC, FLD, FRD, L, R, B (see pin map)
+*/
+
+#include <Arduino.h>
+#include <Servo.h>
+#include <AFMotor.h>
+#include <string.h>
+#include <stdio.h>
+
+// ---------- Pin Map ----------
+#define TRIG_FC 2     // Front-Center TRIG
+#define ECHO_FC A0
+#define TRIG_FLD 3    // Front-Left Diag TRIG
+#define ECHO_FLD A1
+#define TRIG_FRD 5    // Front-Right Diag TRIG
+#define ECHO_FRD A2
+#define TRIG_L 6      // Left TRIG
+#define ECHO_L A3
+#define TRIG_R 10     // Right TRIG
+#define ECHO_R A4
+#define TRIG_B 13     // Back TRIG
+#define ECHO_B A5
+
+#define SERVO_PIN 9   // Steering servo (D9)
+
+// ---------- Hardware ----------
+AF_DCMotor motor(1);    // M1 on Adafruit Motor Shield v1
+Servo steering;
+
+// ---------- Tunables ----------
+const uint16_t ECHO_TIMEOUT_US   = 30000;  // ~5 m timeout
+
+// Steering dynamics
+const int      MAX_STEER_DEG     = 60;
+const float    KP_STEER          = 1.9f;
+const float    KD_STEER          = 0.25f;
+
+// Speed policy
+const int      BASE_SPEED        = 230;    // 0..255
+const int      MIN_SPEED         = 130;
+const int      REVERSE_SPEED     = 160;
+const int      CLEAR_FAST_CM     = 90;     // >= -> allow BASE_SPEED
+const int      CLEAR_SLOW_CM     = 20;     // <= -> clamp to MIN_SPEED
+
+// Stops & safety
+const int      FRONT_STOP_CM     = 15;
+const int      HARD_BLOCK_CM     = 14;
+const int      SIDE_PUSH_START   = 60;
+
+// Repulsion strengths
+const float    K_FRONT           = 1.9f;
+const float    K_DIAG            = 1.7f;
+const float    K_SIDE            = 1.6f;
+const float    K_BACK            = 0.9f;
+
+// Filtering / loop timing
+const float    ALPHA_SMOOTH      = 0.20f;
+
+// Motor polarity helper
+const bool     INVERT_MOTOR      = false;
+
+// ---------- Serial/Protocol ----------
+const unsigned long RX_WATCHDOG_MS = 400;   // stop if no recent RX
+const unsigned long HINT_BIAS_MS   = 450;   // KEEP side bias duration
+const int           SERBUF_LEN     = 64;
+
+// ---------- State (smoothed distances) ----------
+float dFCf=200, dFLDf=200, dFRDf=200, dLf=200, dRf=200, dBf=200;
+
+// PD steering memory
+float prevFy = 0.0f;
+
+// DRIVE hint from Pi
+float g_offset = 0.0f; // -1..+1
+int   g_speed  = 0;    // 0..255
+
+// Hint bias (KEEP LEFT/RIGHT): -1=left, +1=right, 0=none
+int   g_keepBias = 0;
+unsigned long g_keepBias_until = 0;
+
+// Serial RX tracking
+char lineBuf[SERBUF_LEN];
+int  lineLen = 0;
+unsigned long lastRxMs = 0;
+
+// Mode/State
+enum Mode { IDLE, RACE, PARK_ALIGN, PARK_ENTER, PARK_STRAIGHTEN, PARK_CENTER, PARK_HOLD, EMERGENCY_STOP };
+Mode mode = IDLE;
+
+// ---------- Helpers ----------
+template<typename T>
+T clamp(T v, T lo, T hi) { return (v < lo) ? lo : (v > hi) ? hi : v; }
+
+long readDistanceOnce(uint8_t trig, uint8_t echo) {
+  pinMode(trig, OUTPUT);
+  pinMode(echo, INPUT);
+
+  digitalWrite(trig, LOW);  delayMicroseconds(2);
+  digitalWrite(trig, HIGH); delayMicroseconds(10);
+  digitalWrite(trig, LOW);
+
+  unsigned long dur = pulseIn(echo, HIGH, ECHO_TIMEOUT_US);
+  if (dur == 0) return 400;       // treat as far (open space)
+  return (long)(dur / 58);        // microseconds -> cm
+}
+
+long readDistanceMedian3(uint8_t trig, uint8_t echo) {
+  long a = readDistanceOnce(trig, echo);
+  long b = readDistanceOnce(trig, echo);
+  long c = readDistanceOnce(trig, echo);
+  if (a > b) { long t=a; a=b; b=t; }
+  if (b > c) { long t=b; b=c; c=t; }
+  if (a > b) { long t=a; a=b; b=t; }
+  return b;
+}
+
+// Microsecond-precision steering around center (1500us)
+void setSteerDeg(int delta) { // -MAX..+MAX relative to center
+  delta = clamp(delta, -MAX_STEER_DEG, MAX_STEER_DEG);
+  const int center_us = 1500;
+  const float us_per_deg = 11.0f;     // tune (10–12 typical)
+  int pulse = center_us + (int)(delta * us_per_deg);
+  steering.writeMicroseconds(clamp(pulse, 1000, 2000));
+}
+
+void driveForward(uint8_t spd) {
+  motor.setSpeed(spd);
+  if (INVERT_MOTOR) motor.run(BACKWARD);
+  else              motor.run(FORWARD);
+}
+
+void driveBackward(uint8_t spd) {
+  motor.setSpeed(spd);
+  if (INVERT_MOTOR) motor.run(FORWARD);
+  else              motor.run(BACKWARD);
+}
+
+void driveStop() {
+  motor.setSpeed(0);
+  motor.run(RELEASE);
+}
+
+int mapToSpeed(long clear_cm) {
+  if (clear_cm <= CLEAR_SLOW_CM) return MIN_SPEED;
+  if (clear_cm >= CLEAR_FAST_CM) return BASE_SPEED;
+  float t = float(clear_cm - CLEAR_SLOW_CM) / float(CLEAR_FAST_CM - CLEAR_SLOW_CM);
+  int spd = (int)(MIN_SPEED + t * (BASE_SPEED - MIN_SPEED));
+  return clamp(spd, MIN_SPEED, BASE_SPEED);
+}
+
+float repulse(float d_cm, float range_cm, float k) {
+  if (d_cm >= range_cm) return 0.0f;
+  float s = 1.0f - (d_cm / range_cm);
+  if (s < 0) s = 0;
+  return k * s; // smooth, bounded
+}
+
+// Stop → steer away → reverse → arc forward
+void stopSteerAndAvoid(bool preferRight) {
+  driveStop();
+  setSteerDeg(preferRight ? +MAX_STEER_DEG : -MAX_STEER_DEG);
+  delay(120);
+  driveBackward(REVERSE_SPEED);
+  delay(300);
+  driveForward(MIN_SPEED);
+  delay(350);
+  setSteerDeg(0);
+}
+
+// ---------- Serial parsing ----------
+void handleLine(char *s) {
+  lastRxMs = millis();  // for watchdog
+
+  // Trim CR/LF
+  int n = 0;
+  while (s[n]) n++;
+  while (n > 0 && (s[n-1] == '\r' || s[n-1] == '\n' || s[n-1] == ' ')) { s[n-1] = 0; n--; }
+  if (n == 0) return;
+
+  // Commands:
+  // GO | MODE RACE | MODE PARK | DRIVE <offset> <speed> | KEEP LEFT/RIGHT | HB | STOP
+  if (strcmp(s, "GO") == 0) {
+    // remain IDLE until MODE arrives
+    return;
+  }
+
+  if (strncmp(s, "MODE ", 5) == 0) {
+    char *arg = s + 5;
+    if (strcmp(arg, "RACE") == 0) {
+      mode = RACE;
+      g_keepBias = 0; g_keepBias_until = 0;
+      setSteerDeg(0);
+    } else if (strcmp(arg, "PARK") == 0) {
+      mode = PARK_ALIGN;
+      g_keepBias = 0; g_keepBias_until = 0;
+    }
+    return;
+  }
+
+  if (strncmp(s, "DRIVE ", 6) == 0) {
+    // Example: DRIVE -0.18 180
+    float o; int sp;
+    if (sscanf(s + 6, "%f %d", &o, &sp) == 2) {
+      g_offset = clamp(o, -1.0f, 1.0f);
+      g_speed  = clamp(sp, 0, 255);
+    }
+    return;
+  }
+
+  if (strcmp(s, "KEEP LEFT") == 0)  { g_keepBias = -1; g_keepBias_until = millis() + HINT_BIAS_MS; return; }
+  if (strcmp(s, "KEEP RIGHT") == 0) { g_keepBias = +1; g_keepBias_until = millis() + HINT_BIAS_MS; return; }
+
+  if (strcmp(s, "HB") == 0)   return;  // heartbeat
+  if (strcmp(s, "STOP") == 0) { mode = EMERGENCY_STOP; driveStop(); return; }
+
+  // Unknown commands ignored
+}
+
+void pumpSerial() {
+  while (Serial.available()) {
+    char c = Serial.read();
+    if (c == '\n') {
+      lineBuf[lineLen] = 0;
+      handleLine(lineBuf);
+      lineLen = 0;
+    } else {
+      if (lineLen < SERBUF_LEN - 1) lineBuf[lineLen++] = c;
+      else lineLen = 0; // overflow -> reset
+    }
+  }
+}
+
+// ---------- Parking helpers (ultrasonic-based) ----------
+// Sequence: ALIGN → ENTER → STRAIGHTEN → CENTER → HOLD
+
+const int ALIGN_TOL_CM       = 3;   // |L-R| <= -> parallel
+const int ALIGN_SPEED        = 120;
+
+const int ENTER_BACK_NEAR_CM = 22;  // trigger straighten
+const int ENTER_SIDE_NEAR_CM = 18;  // right side proximity during angle-in
+
+const int STRAIGHT_TOL_CM    = 3;   // |L-R| small -> straight
+const int CENTER_FRONT_CM    = 18;  // target gaps (tune in venue)
+const int CENTER_BACK_CM     = 18;
+
+unsigned long phaseStartMs = 0;
+
+void enterPhase(Mode m) { mode = m; phaseStartMs = millis(); }
+
+// ---------- Setup ----------
+void setup() {
+  Serial.begin(115200);
+  delay(50);
+
+  steering.attach(SERVO_PIN);
+  setSteerDeg(0);
+
+  motor.setSpeed(0);
+  motor.run(RELEASE);
+
+  // Seed filters
+  dFCf  = readDistanceMedian3(TRIG_FC,  ECHO_FC);
+  dFLDf = readDistanceMedian3(TRIG_FLD, ECHO_FLD);
+  dFRDf = readDistanceMedian3(TRIG_FRD, ECHO_FRD);
+  dLf   = readDistanceMedian3(TRIG_L,   ECHO_L);
+  dRf   = readDistanceMedian3(TRIG_R,   ECHO_R);
+  dBf   = readDistanceMedian3(TRIG_B,   ECHO_B);
+
+  // Signal ready to Pi
+  Serial.println("RDY");
+  lastRxMs = millis();
+}
+
+// ---------- Main Loop ----------
+void loop() {
+  // 0) Serial & watchdog
+  pumpSerial();
+  if (mode != EMERGENCY_STOP) {
+    if (millis() - lastRxMs > RX_WATCHDOG_MS) {
+      driveStop();
+      setSteerDeg(0);
+    }
+  }
+
+  // 1) Read & smooth ultrasonics
+  long dFC  = readDistanceMedian3(TRIG_FC,  ECHO_FC);
+  long dFLD = readDistanceMedian3(TRIG_FLD, ECHO_FLD);
+  long dFRD = readDistanceMedian3(TRIG_FRD, ECHO_FRD);
+  long dL   = readDistanceMedian3(TRIG_L,   ECHO_L);
+  long dR   = readDistanceMedian3(TRIG_R,   ECHO_R);
+  long dB   = readDistanceMedian3(TRIG_B,   ECHO_B);
+
+  dFCf  = ALPHA_SMOOTH * dFC  + (1 - ALPHA_SMOOTH) * dFCf;
+  dFLDf = ALPHA_SMOOTH * dFLD + (1 - ALPHA_SMOOTH) * dFLDf;
+  dFRDf = ALPHA_SMOOTH * dFRD + (1 - ALPHA_SMOOTH) * dFRDf;
+  dLf   = ALPHA_SMOOTH * dL   + (1 - ALPHA_SMOOTH) * dLf;
+  dRf   = ALPHA_SMOOTH * dR   + (1 - ALPHA_SMOOTH) * dRf;
+  dBf   = ALPHA_SMOOTH * dB   + (1 - ALPHA_SMOOTH) * dBf;
+
+  // 2) Global safety
+  if (mode != EMERGENCY_STOP) {
+    if (dFCf < FRONT_STOP_CM) {
+      bool freerRight = (dRf > dLf);
+      stopSteerAndAvoid(freerRight);
+      delay(20);
+      return;
+    }
+    if (dFCf < HARD_BLOCK_CM || (dFLDf < HARD_BLOCK_CM && dFRDf < HARD_BLOCK_CM)) {
+      bool freerRight = (dRf > dLf);
+      stopSteerAndAvoid(freerRight);
+      delay(20);
+      return;
+    }
+  }
+
+  // 3) Mode behavior
+  switch (mode) {
+    case IDLE: {
+      driveStop();
+      setSteerDeg(0);
+      break;
+    }
+
+    case RACE: {
+      // Potential fields from distances
+      float Fx = 0, Fy = 0;
+      float fFC  = repulse(dFCf,  CLEAR_FAST_CM, K_FRONT);
+      Fx += -fFC;
+
+      float fFLD = repulse(dFLDf, CLEAR_FAST_CM, K_DIAG);
+      float fFRD = repulse(dFRDf, CLEAR_FAST_CM, K_DIAG);
+      const float c45 = 0.70710678f;
+      Fx += -fFLD * c45;   Fy += -fFLD * c45;   // from +45°
+      Fx += -fFRD * c45;   Fy += +fFRD * c45;   // from -45°
+
+      float fL = repulse(dLf, SIDE_PUSH_START, K_SIDE);
+      float fR = repulse(dR,  SIDE_PUSH_START, K_SIDE);
+      Fy += -fL;
+      Fy += +fR;
+
+      float fB = repulse(dBf, SIDE_PUSH_START, K_BACK);
+      Fx += +fB;
+
+      // PD on lateral field
+      float Fy_dot = Fy - prevFy; prevFy = Fy;
+
+      // Base steer from Pi lane offset
+      float steer_from_offset = g_offset * MAX_STEER_DEG;
+
+      // Temporary KEEP bias
+      int bias = 0;
+      if (g_keepBias != 0 && (long)(millis() - g_keepBias_until) < 0) {
+        bias = (g_keepBias > 0) ? +8 : -8; // ±8°
+      } else {
+        g_keepBias = 0;
+      }
+
+      float steer_from_fields = (KP_STEER * Fy * 30.0f) + (KD_STEER * Fy_dot * 30.0f);
+      int steerDeg = (int)clamp(steer_from_offset + steer_from_fields + bias,
+                                (float)-MAX_STEER_DEG, (float)MAX_STEER_DEG);
+      setSteerDeg(steerDeg);
+
+      // Speed from Pi hint, limited by forward clearance
+      long diagAvg = (long)((dFLDf + dFRDf) * 0.5f);
+      long forwardClear = min((long)dFCf, diagAvg);
+      int spdClear = mapToSpeed(forwardClear);
+      int spd = clamp(g_speed, 0, 255);
+      spd = min(spd, spdClear);
+
+      if (Fx < -1.2f) spd = max(spd - 50, MIN_SPEED);  // strong pushback → slow a bit
+
+      if (spd <= 0) driveStop(); else driveForward(spd);
+      break;
+    }
+
+    case PARK_ALIGN: {
+      // Equalize left/right to get parallel
+      int diff = (int)(dLf - dRf);            // +ve = too far from left wall
+      int sgn = (diff > 0) ? -1 : +1;         // steer toward nearer wall
+      int mag = min(12, max(4, abs(diff)));   // gentle
+      setSteerDeg(sgn * mag);
+
+      if (dFCf > 25) driveForward(ALIGN_SPEED);
+      else if (dBf > 25) driveBackward(ALIGN_SPEED - 10);
+      else driveStop();
+
+      if (abs(diff) <= ALIGN_TOL_CM || (millis() - phaseStartMs > 5000UL)) {
+        driveStop(); setSteerDeg(0); enterPhase(PARK_ENTER);
+      }
+      break;
+    }
+
+    case PARK_ENTER: {
+      // Angle-in with right lock until back/right get near
+      setSteerDeg(+MAX_STEER_DEG);
+      if (dBf > ENTER_BACK_NEAR_CM && dRf > ENTER_SIDE_NEAR_CM) {
+        driveBackward(REVERSE_SPEED);
+      } else {
+        driveStop(); enterPhase(PARK_STRAIGHTEN);
+      }
+      if (millis() - phaseStartMs > 4000UL) enterPhase(PARK_STRAIGHTEN);
+      break;
+    }
+
+    case PARK_STRAIGHTEN: {
+      setSteerDeg(-MAX_STEER_DEG);
+      if (dBf > 16) driveBackward(MIN_SPEED); else driveStop();
+
+      int diff = (int)(dLf - dRf);
+      if (abs(diff) <= STRAIGHT_TOL_CM || millis() - phaseStartMs > 2000UL) {
+        driveStop(); setSteerDeg(0); enterPhase(PARK_CENTER);
+      }
+      break;
+    }
+
+    case PARK_CENTER: {
+      // Center between front/back
+      bool front_ok = (dFCf >= CENTER_FRONT_CM - 2) && (dFCf <= CENTER_FRONT_CM + 6);
+      bool back_ok  = (dBf >= CENTER_BACK_CM - 2)  && (dBf <= CENTER_BACK_CM + 6);
+
+      if (!front_ok && dFCf > CENTER_FRONT_CM + 6 && dFCf > 14) {
+        setSteerDeg(0); driveForward(MIN_SPEED);
+      } else if (!back_ok && dBf > CENTER_BACK_CM + 6 && dBf > 14) {
+        setSteerDeg(0); driveBackward(MIN_SPEED);
+      } else {
+        driveStop();
+      }
+
+      if ((front_ok && back_ok) || (millis() - phaseStartMs > 3000UL)) {
+        enterPhase(PARK_HOLD);
+      }
+      break;
+    }
+
+    case PARK_HOLD: {
+      driveStop();
+      setSteerDeg(0);
+      // Stay here; Pi will only send HB/STOP
+      break;
+    }
+
+    case EMERGENCY_STOP: {
+      driveStop();
+      setSteerDeg(0);
+      break;
+    }
+  }
+
+  // Smooth servo/motor update cadence
+  delay(20);
+
+  // --- Optional debug prints ---
+  /*
+  static uint16_t dbgDiv = 0;
+  if ((dbgDiv++ % 20) == 0) {
+    Serial.print("MODE:"); Serial.print(mode);
+    Serial.print(" | FC:"); Serial.print(dFCf);
+    Serial.print(" FLD:"); Serial.print(dFLDf);
+    Serial.print(" FRD:"); Serial.print(dFRDf);
+    Serial.print(" L:"); Serial.print(dLf);
+    Serial.print(" R:"); Serial.print(dRf);
+    Serial.print(" B:"); Serial.print(dBf);
+    Serial.print(" | g_off:"); Serial.print(g_offset,3);
+    Serial.print(" g_spd:"); Serial.print(g_speed);
+    Serial.print(" bias:"); Serial.println(g_keepBias);
+  }
+  */
+}
+
+```
 ```bash
 cd src/
 python3 wro.py sim                      # Run in simulator
