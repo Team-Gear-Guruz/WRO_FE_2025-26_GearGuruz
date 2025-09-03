@@ -1,4 +1,4 @@
-# ⚡ Electromechanical Diagrams
+# Electromechanical Diagrams
 This folder documents the **wiring, control logic, and behavior** of our WRO Future Engineers vehicle.  
 The diagrams show how the **Raspberry Pi (vision + decision-making)**, **Arduino (actuator control)**, and **sensors/motors** all work together.  
 At a high level:
@@ -20,7 +20,7 @@ At a high level:
 
 ---
 
-## ⚙️ PD Control (Steering)
+## PD Control (Steering)
 Our vehicle uses a **Proportional–Derivative (PD) Controller** to keep itself centered in the lane.
 
 **PD Control Formula:**
@@ -61,7 +61,7 @@ stateDiagram-v2
 
 ---
 
-## 🔌 System Architecture Flow
+## System Architecture Flow
 
 ```mermaid
 flowchart TD
