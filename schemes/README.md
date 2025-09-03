@@ -8,7 +8,7 @@ At a high level:
 
 ---
 
-## 🔑 Key Components
+## Key Components
 | Component                        | Role                                                                 |
 |----------------------------------|----------------------------------------------------------------------|
 | **Arduino Uno**                  | Low-level controller for motor & servo control, ultrasonic sensors   |
@@ -33,11 +33,11 @@ u(t) = Kp × e(t) + Kd × de(t)/dt
 - **Kd (Derivative Gain)** → Corrects based on how fast the error is changing (prevents zig-zagging)  
 - **u(t)** → Steering correction applied to the servo  
 
-👉 This ensures smooth, stable lane following without overshooting.
+This ensures smooth, stable lane following without overshooting.
 
 ---
 
-## 🧩 FSM (Finite State Machine)
+## FSM (Finite State Machine)
 High-level behavior is managed by an **FSM**, which switches states depending on sensor and camera input.
 
 **States:**
@@ -46,7 +46,7 @@ High-level behavior is managed by an **FSM**, which switches states depending on
 - **Turn Around** → Used if the path is completely blocked  
 - **Parking** → Activated when magenta parking zone is detected  
 
-### 📊 State Transition Diagram
+### State Transition Diagram
 
 ```mermaid
 stateDiagram-v2
@@ -65,17 +65,17 @@ stateDiagram-v2
 
 ```mermaid
 flowchart TD
-    Camera["📷 Camera"] --> Pi["🍓 Raspberry Pi"]
-    Pi --> Arduino["🤖 Arduino Uno"]
+    Camera["📷 Camera"] --> Pi["Raspberry Pi"]
+    Pi --> Arduino["Arduino Uno"]
     Arduino --> MotorDriver["⚡ Motor Driver (L293D/TB6612)"]
-    MotorDriver --> DCMotor["🌀 DC Motor"]
-    Arduino --> Servo["⚙️ Steering Servo"]
-    Ultrasonics["📡 Ultrasonic Sensors"] --> Arduino
+    MotorDriver --> DCMotor["DC Motor"]
+    Arduino --> Servo["Steering Servo"]
+    Ultrasonics["Ultrasonic Sensors"] --> Arduino
 ```
 
 ---
 
-## 📐 Wiring Overview
+## Wiring Overview
 
 ### Power Distribution
 - **Li-Po Battery** → Powers entire system through voltage regulators
@@ -103,7 +103,7 @@ flowchart TD
 
 ---
 
-## 🎯 Control Logic Summary
+## Control Logic Summary
 
 1. **Vision Processing** (Raspberry Pi)
    - Captures frames at 30 FPS
@@ -129,7 +129,7 @@ flowchart TD
 
 ---
 
-## 📝 Notes
+## Notes
 - The system runs at **10Hz update rate** for real-time responsiveness
 - PD gains are tuned empirically: **Kp = 0.8**, **Kd = 0.3**
 - Ultrasonic sensors have **2-400cm range** with 3mm resolution
