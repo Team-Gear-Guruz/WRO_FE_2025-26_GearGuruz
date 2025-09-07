@@ -1690,56 +1690,73 @@ Uncomment a horizontal flip:
 You can bench the Pi without a robot using a tiny Python script that prints `RDY`, then echos back whatever the Pi sends. Ask and I’ll drop it in as `tools/serial_echo.py`.
 
 
-# 🏁 Raspberry Pi Code -  Obstacle Challenge
+# 🏁 Raspberry Pi Code -  Obstacle Challenge 
 ```python
 #!/usr/bin/env python3
 """
-WRO 2025 – Vision → Arduino High-Level Control (Obstacle Challenge)
-[unchanged header/docs]
-"""
+WRO 2025 – Vision → Arduino High-Level Control (Webcam + Parking Steering)
 
-import os
-import sys
-import time
+- Webcam via OpenCV V4L2 (/dev/video*)
+- Locks exposure & white balance (v4l2-ctl) for stable HSV colors
+- RACE: line-follow (orange/blue), red/green pillar hints
+- START zone (magenta) lap counting with guard if starting inside zone
+- PARK ALIGN: compute steering from magenta (fallback black) to align parallel; does NOT drive inside bay
+- Robust: auto-fallback to NO_SERIAL when Arduino not connected
+- Flags:
+    --test-vision   : run camera + color detection only (skip Arduino/serial)
+    --no-arduino    : force NO_SERIAL even if a port exists
+    --video-index N : choose /dev/videoN (default 0)
+"""
+import os, sys, time, glob, subprocess, argparse, math
 import cv2
 import numpy as np
+import serial
 
-# ---------------------- Preview / display mode ---------------------------------
+# ---------------------- Headless / Qt ------------------------------------------
 HEADLESS = False
 if HEADLESS:
     os.environ["QT_QPA_PLATFORM"] = "offscreen"
+if not os.environ.get("DISPLAY"):
+    HEADLESS = True
+    os.environ["QT_QPA_PLATFORM"] = "offscreen"
 
-# ------------------------ Serial ------------------------------------------------
-import serial
-_last_sent = ""
-_last_tx = 0.0
+# ---------------------- Serial --------------------------------------------------
 BAUD = 115200
 ser = None
+_last_sent = ""
+_last_tx = 0.0
+NO_SERIAL = False  # set by flags or auto-detection
 
 def serial_open(auto_ports=None, retries=6, wait_between=1.0):
-    import glob
-    global ser
+    """Try to open Arduino serial; on failure, enable NO_SERIAL and continue."""
+    global ser, NO_SERIAL
+    if NO_SERIAL:
+        print("[Pi] NO_SERIAL=True → skip serial.")
+        return None
     if auto_ports is None:
         auto_ports = sorted(glob.glob("/dev/ttyACM*")) + sorted(glob.glob("/dev/ttyUSB*"))
-        if not auto_ports:
-            auto_ports = ["/dev/ttyACM0", "/dev/ttyUSB0"]
-
+        auto_ports = auto_ports or ["/dev/ttyACM0", "/dev/ttyUSB0"]
     for attempt in range(1, retries + 1):
         for p in auto_ports:
             try:
-                print(f"[Pi] Trying serial port {p} @ {BAUD}…")
+                print(f"[Pi] Trying {p} @ {BAUD}…")
                 s = serial.Serial(p, BAUD, timeout=0.02)
-                time.sleep(2)  # let Arduino reset
+                time.sleep(2.0)  # Arduino auto-reset
                 ser = s
-                print(f"[Pi] Connected to {p}")
+                print(f"[Pi] Connected: {p}")
                 return p
             except Exception as e:
-                print(f"[Pi] Port {p} failed: {e}")
-        print(f"[Pi] Retry {attempt}/{retries}… waiting {wait_between}s")
+                print(f"[Pi] {p} failed: {e}")
+        print(f"[Pi] Retry {attempt}/{retries} in {wait_between}s")
         time.sleep(wait_between)
-    raise RuntimeError("[Pi] Could not open any serial port (ACM/USB). Check cable/permissions (dialout).")
+    print("[Pi] WARN: No serial ports found. Using NO_SERIAL=True.")
+    NO_SERIAL = True
+    return None
 
-def wait_for_arduino_ready(max_wait=10.0):
+def wait_for_arduino_ready(max_wait=17.0):
+    if NO_SERIAL:
+        print("[Pi] NO_SERIAL: skip RDY wait.")
+        return False
     print("[Pi] Waiting for Arduino RDY…")
     t0 = time.time()
     while time.time() - t0 < max_wait:
@@ -1749,23 +1766,27 @@ def wait_for_arduino_ready(max_wait=10.0):
             line = ""
         if line == "RDY":
             print("[Pi] Arduino RDY")
-            return
-    print("[Pi] No RDY seen, continuing…")
+            return True
+        time.sleep(0.01)
+    print("[Pi] No RDY seen; continuing.")
+    return False
 
 def send_line(s: str, min_interval=0.08, dedupe=True):
     global _last_sent, _last_tx
     now = time.time()
     if dedupe and s == _last_sent and (now - _last_tx) < min_interval:
         return
+    if NO_SERIAL or ser is None:
+        print(f"[TX:TEST] {s}")
+        _last_sent, _last_tx = s, now
+        return
     try:
-        ser.write((s + "\n").encode())
+        ser.write((s + "\n").encode("ascii", errors="ignore"))
     except Exception as e:
         print(f"[Pi] Serial write failed: {e}")
-    _last_sent = s
-    _last_tx = now
-    # print("[Pi] TX:", s)
+    _last_sent, _last_tx = s, now
 
-# ------------------------ Optional Start Button --------------------------------
+# ---------------------- Start Button -------------------------------------------
 HAS_GPIO = False
 try:
     import RPi.GPIO as GPIO
@@ -1773,62 +1794,76 @@ try:
 except Exception:
     HAS_GPIO = False
 
-START_PIN = 17  # BCM
+START_PIN = 17
 
 def wait_for_start_button():
-    if not HAS_GPIO:
-        print("[Pi] GPIO not available, press Enter to START…")
-        try:
-            input()
-        except EOFError:
-            pass
+    if NO_SERIAL or not HAS_GPIO:
+        print("[Pi] Press Enter to START…")
+        try: input()
+        except EOFError: pass
         return
     GPIO.setmode(GPIO.BCM)
     GPIO.setup(START_PIN, GPIO.IN, pull_up_down=GPIO.PUD_UP)
-    print("[Pi] Waiting for Start button (hold to ground)…")
-    stable_low_ms = 0
+    print("[Pi] Waiting for Start button…")
     while True:
         if GPIO.input(START_PIN) == 0:
-            stable_low_ms += 10
-            if stable_low_ms >= 300:
-                print("[Pi] START pressed!")
-                break
-        else:
-            stable_low_ms = 0
+            print("[Pi] START pressed!")
+            break
         time.sleep(0.01)
 
-# ----------------------------- Picamera2 setup ---------------------------------
-try:
-    from picamera2 import Picamera2
-except Exception as e:
-    print("[Pi] Picamera2 is not installed or failed to import.")
-    print("     Install with: sudo apt update && sudo apt install -y python3-picamera2")
-    raise
+# ---------------------- Webcam (V4L2) ------------------------------------------
+def wait_for_camera_device(timeout=15.0):
+    t0 = time.time()
+    while time.time() - t0 < timeout:
+        if glob.glob("/dev/video*"): return True
+        time.sleep(0.1)
+    return False
 
-def camera_open():
-    """
-    Initialize PiCamera2 in RGB888 (deterministic), then we convert/choose BGR per frame.
-    Locks AWB after warm-up to avoid hue drift.
-    """
-    cam = Picamera2()
-    cfg = cam.create_video_configuration(main={"size": (640, 480), "format": "RGB888"})
-    cam.configure(cfg)
+def free_camera_nodes():
+    nodes = glob.glob("/dev/video*")
+    if not nodes: return
     try:
-        cam.set_controls({"AwbEnable": True, "AeEnable": True})
+        subprocess.run(["/usr/bin/fuser", "-k"] + nodes,
+                       check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     except Exception:
         pass
-    cam.start()
-    time.sleep(0.7)
-    try:
-        cam.set_controls({"AwbEnable": False})  # lock AWB so hues don’t drift
-    except Exception:
-        pass
-    return cam
 
-# ----------------------------- Vision settings ---------------------------------
+def configure_logitech_uvc(dev="/dev/video0", exposure_abs=120, wb_temp=4000, gain=0):
+    cmds = [
+        ["v4l2-ctl", "-d", dev, "--set-ctrl=exposure_auto=1"],
+        ["v4l2-ctl", "-d", dev, f"--set-ctrl=exposure_absolute={exposure_abs}"],
+        ["v4l2-ctl", "-d", dev, "--set-ctrl=white_balance_temperature_auto=0"],
+        ["v4l2-ctl", "-d", dev, f"--set-ctrl=white_balance_temperature={wb_temp}"],
+    ]
+    if gain is not None:
+        cmds.append(["v4l2-ctl", "-d", dev, f"--set-ctrl=gain={gain}"])
+    for c in cmds:
+        try:
+            subprocess.run(c, check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except Exception:
+            pass
+
+def camera_open_webcam(index=0, width=640, height=480, target_fps=30):
+    if not wait_for_camera_device(): raise RuntimeError("[Pi] No /dev/video* found.")
+    free_camera_nodes(); time.sleep(0.2)
+    cap = cv2.VideoCapture(index, cv2.CAP_V4L2)
+    if not cap.isOpened(): raise RuntimeError(f"[Pi] Failed to open /dev/video{index}")
+    cap.set(cv2.CAP_PROP_FRAME_WIDTH,  width)
+    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
+    cap.set(cv2.CAP_PROP_FPS,         target_fps)
+    cap.set(cv2.CAP_PROP_BUFFERSIZE,  2)
+    t0 = time.time()
+    while time.time() - t0 < 1.5:
+        ok, frame = cap.read()
+        if ok and frame is not None and frame.size > 0:
+            print(f"[Pi] Webcam ready at {frame.shape[1]}x{frame.shape[0]}")
+            return cap
+        time.sleep(0.05)
+    raise RuntimeError("[Pi] Webcam warmup failed")
+
+# ---------------------- Vision (HSV masks) -------------------------------------
 LINE_MODE = "orange"   # or "blue"
-DEBUG_OVERLAY = True
-SWAP_RB = False  # legacy toggle; auto-detect below should make this unnecessary
+DEBUG_OVERLAY = False
 
 color_ranges = {
     "red1":     ((  0,  80,  70), ( 12, 255, 255)),
@@ -1842,11 +1877,7 @@ color_ranges = {
 
 def preprocess_hsv(frame_bgr):
     b = cv2.GaussianBlur(frame_bgr, (5,5), 0)
-    hsv = cv2.cvtColor(b, cv2.COLOR_BGR2HSV)
-    h, s, v = cv2.split(hsv)
-    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
-    v = clahe.apply(v)
-    return cv2.merge([h, s, v])
+    return cv2.cvtColor(b, cv2.COLOR_BGR2HSV)
 
 def clean_mask(mask):
     k3 = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3,3))
@@ -1857,30 +1888,21 @@ def clean_mask(mask):
 
 def detect_colors(frame_bgr):
     hsv = preprocess_hsv(frame_bgr)
-    masks = {}
     r1 = cv2.inRange(hsv, color_ranges["red1"][0], color_ranges["red1"][1])
     r2 = cv2.inRange(hsv, color_ranges["red2"][0], color_ranges["red2"][1])
-    red = cv2.bitwise_or(r1, r2)
-    masks["red"] = clean_mask(red)
+    masks = {"red": clean_mask(cv2.bitwise_or(r1, r2))}
     for c in ["green", "magenta", "orange", "blue", "black"]:
-        m = cv2.inRange(hsv, color_ranges[c][0], color_ranges[c][1])
-        masks[c] = clean_mask(m)
-    if SWAP_RB:
-        masks["red"], masks["blue"] = masks["blue"], masks["red"]
+        masks[c] = clean_mask(cv2.inRange(hsv, color_ranges[c][0], color_ranges[c][1]))
     areas = {k: int(cv2.countNonZero(v)) for k, v in masks.items()}
     return masks, areas
 
 def centroid_from_mask(mask):
     cnts, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    if not cnts:
-        return None
+    if not cnts: return None
     c = max(cnts, key=cv2.contourArea)
     M = cv2.moments(c)
-    if M["m00"] <= 0:
-        return None
-    cx = int(M["m10"] / M["m00"])
-    cy = int(M["m01"] / M["m00"])
-    return (cx, cy)
+    if M["m00"] <= 0: return None
+    return (int(M["m10"]/M["m00"]), int(M["m01"]/M["m00"]))
 
 def track_line(frame_bgr, masks, mode):
     chosen = "orange" if mode != "blue" else "blue"
@@ -1891,222 +1913,164 @@ def track_line(frame_bgr, masks, mode):
     if area > 800:
         cen = centroid_from_mask(mask)
         if cen: cx = cen[0]
-    else:
-        gray = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2GRAY)
-        _, binary = cv2.threshold(gray, 100, 255, cv2.THRESH_BINARY_INV)
-        cen = centroid_from_mask(binary)
-        if cen: cx = cen[0]
     return cx
 
-def largest_contour_bbox(mask):
-    cnts, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    if not cnts:
-        return None, 0
-    c = max(cnts, key=cv2.contourArea)
-    x,y,w,h = cv2.boundingRect(c)
-    return (x,y,w,h), w*h
+# ---------------------- Parking Steering ---------------------------------------
+def _median_angle_deg(lines):
+    if lines is None or len(lines) == 0: return 0.0, 0
+    angs = []
+    for x1,y1,x2,y2 in lines.reshape(-1,4):
+        a = math.degrees(math.atan2(y2 - y1, x2 - x1))
+        while a <= -90: a += 180
+        while a >   90: a -= 180
+        angs.append(a)
+    if not angs: return 0.0, 0
+    return float(np.median(angs)), len(angs)
 
-# ---------------------- Channel-order auto-detect -------------------------------
-# Decide once whether frames must be swapped RGB->BGR or used as-is
-USE_SWAP_RGB2BGR = None   # None=undecided, True=swap, False=as-is
-DECIDE_FRAMES = 18        # number of frames to evaluate before locking
+def parking_steer(frame_bgr, masks):
+    """Return (steer [-1..1], angle_err_deg, lateral_norm) for parallel align."""
+    mag = masks.get("magenta", None)
+    blk = masks.get("black", None)
+    use_mag = mag is not None and cv2.countNonZero(mag) > 500
+    mask = mag if use_mag else blk
+    if mask is None or cv2.countNonZero(mask) < 200:
+        return 0.0, 0.0, 0.0
+    h, w = mask.shape[:2]
+    edges = cv2.Canny(mask, 50, 150)
+    lines = cv2.HoughLinesP(edges, 1, np.pi/180, threshold=40, minLineLength=40, maxLineGap=12)
+    ang_err, _ = _median_angle_deg(lines)
+    cen = centroid_from_mask(mask)
+    lateral = 0.0
+    if cen: lateral = (cen[0] - (w//2)) / (w/2.0)
+    k_lat, k_ang = 0.8, 0.02
+    steer = float(np.clip(k_lat*lateral + k_ang*ang_err, -1.0, 1.0))
+    return steer, float(ang_err), float(lateral)
 
-def _color_areas_for_frame(bgr_frame):
-    masks, areas = detect_colors(bgr_frame)
-    return areas
-
-def _score_mapping(bgr_frame, line_mode="orange"):
-    """Higher score == mapping fits expectations better."""
-    areas = _color_areas_for_frame(bgr_frame)
-    line_key = "orange" if line_mode != "blue" else "blue"
-    opp_key  = "blue"   if line_key == "orange" else "orange"
-    score = 2.5 * areas.get(line_key, 0) - 1.0 * areas.get(opp_key, 0)
-    score += 0.5 * (areas.get("red", 0) + areas.get("green", 0))
-    return score
-
-# ------------------------------ Main -------------------------------------------
+# ---------------------- Main ----------------------------------------------------
 def main():
-    time.sleep(2)
+    global NO_SERIAL
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--test-vision", action="store_true")
+    ap.add_argument("--no-arduino", action="store_true")
+    ap.add_argument("--video-index", type=int, default=0)
+    args = ap.parse_args()
+    if args.test_vision or args.no_arduino: NO_SERIAL = True
 
-    # Serial: scan and connect
-    try:
-        port_used = serial_open()
-    except Exception as e:
-        print(str(e))
-        print("[Pi] Tip: Add your user to 'dialout' group, then reboot:")
-        print("     sudo usermod -a -G dialout $USER")
-        sys.exit(1)
+    dev = f"/dev/video{args.video_index}"
+    configure_logitech_uvc(dev, exposure_abs=120, wb_temp=4000, gain=0)
+    cap = camera_open_webcam(index=args.video_index, width=640, height=480, target_fps=30)
 
-    print("[Pi] Initializing camera…")
-    cam = None
-    for attempt in range(1, 4):
-        try:
-            cam = camera_open()
-            break
-        except Exception as e:
-            print(f"[Pi] Camera init failed (attempt {attempt}/3): {e}")
-            time.sleep(0.5)
-    if cam is None:
-        print("[Pi] Camera could not be initialized. Exiting.")
-        sys.exit(2)
+    serial_open()
 
-    # Create preview window if not headless
     if not HEADLESS:
-        cv2.namedWindow("WRO FE – Vision", cv2.WINDOW_NORMAL)
-        cv2.resizeWindow("WRO FE – Vision", 900, 600)
+        cv2.namedWindow("WRO FE – Vision (Webcam)", cv2.WINDOW_NORMAL)
+        cv2.resizeWindow("WRO FE – Vision (Webcam)", 900, 600)
 
-    # WRO Start button (waiting state)
     wait_for_start_button()
 
-    # Arduino handshake
-    wait_for_arduino_ready()
-    send_line("GO", dedupe=False)
-    send_line("MODE RACE")
+    if not NO_SERIAL:
+        wait_for_arduino_ready(17.0)
+        t0 = time.time()
+        while time.time() - t0 < 3.0:
+            send_line("GO", dedupe=False)
+            send_line("MODE RACE", dedupe=False)
+            time.sleep(0.25)
 
     laps_seen = 0
     magenta_seen_last = False
     STATE = "RACE"
+    left_start_zone = False
     last_hb = 0.0
+    HB_PERIOD = 0.2
+
+    PARK_ALIGN_DURATION = 4.0   # seconds of gentle parallel align driving
+    PARK_SPEED = 90             # low forward speed to avoid entering bay
+    park_t0 = None
 
     try:
         while True:
-            # Read a frame, re-open camera on transient errors
-            try:
-                frame = cam.capture_array("main")
-            except Exception as e:
-                print(f"[Pi] Camera read failed: {e}; reinitializing camera…")
-                try:
-                    cam.stop()
-                except Exception:
-                    pass
-                cam = camera_open()
-                continue
+            ok, frame_bgr = cap.read()
+            if not ok or frame_bgr is None or frame_bgr.size == 0:
+                time.sleep(0.01); continue
 
-            if frame is None or frame.size == 0:
-                print("[Pi] Empty frame, skipping this cycle.")
-                time.sleep(0.02)
-                continue
-
-            # --- Auto-detect channel order once, then lock it ---
-            global USE_SWAP_RGB2BGR
-            if USE_SWAP_RGB2BGR is None:
-                # Try: assume AS-IS is already BGR (no swap)
-                bgr_as_is = frame
-                # And: swap RGB->BGR
-                bgr_swapped = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
-
-                score_as_is   = _score_mapping(bgr_as_is,   line_mode=LINE_MODE)
-                score_swapped = _score_mapping(bgr_swapped, line_mode=LINE_MODE)
-
-                if not hasattr(main, "_decide_hist"):
-                    main._decide_hist = {"as_is": 0.0, "swap": 0.0, "count": 0}
-                main._decide_hist["as_is"]  += score_as_is
-                main._decide_hist["swap"]   += score_swapped
-                main._decide_hist["count"]  += 1
-
-                # Use the better mapping for THIS frame too
-                if score_swapped > score_as_is:
-                    frame_bgr = bgr_swapped
-                else:
-                    frame_bgr = bgr_as_is
-
-                # Lock after enough frames
-                if main._decide_hist["count"] >= DECIDE_FRAMES:
-                    USE_SWAP_RGB2BGR = main._decide_hist["swap"] > main._decide_hist["as_is"]
-                    print(f"[Pi] Channel mapping locked: "
-                          f"{'RGB->BGR swap' if USE_SWAP_RGB2BGR else 'as-is'} "
-                          f"(scores as_is={main._decide_hist['as_is']:.1f}, "
-                          f"swap={main._decide_hist['swap']:.1f})")
-            else:
-                frame_bgr = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR) if USE_SWAP_RGB2BGR else frame
-
-            # Optional orientation (uncomment if needed):
-            # frame_bgr = cv2.flip(frame_bgr, 1)   # mirror left/right
-            # frame_bgr = cv2.flip(frame_bgr, 0)   # upside down
-            # frame_bgr = cv2.flip(frame_bgr, -1)  # both
-
-            masks, areas = detect_colors(frame_bgr)
             h, w = frame_bgr.shape[:2]
             center_x = w // 2
 
-            hud = []
-            min_area = int(0.002 * (w*h))         # pillar detection
-            near_area = int(0.004 * (w*h))        # "close" pillar
-            start_mag_area = int(0.0035 * (w*h))  # start section threshold
+            masks, areas = detect_colors(frame_bgr)
+            min_area = int(0.002 * (w*h))
+            near_area = int(0.004 * (w*h))
+            start_mag_area = int(0.0035 * (w*h))
 
-            # Pillar hints
-            if areas["red"] > min_area:
-                send_line("KEEP RIGHT")
-                hud.append("RED → KEEP RIGHT")
-            if areas["green"] > min_area:
-                send_line("KEEP LEFT")
-                hud.append("GREEN → KEEP LEFT")
+            # RACE: pillar hints
+            if STATE == "RACE" and not NO_SERIAL:
+                if areas["red"]   > min_area:  send_line("KEEP RIGHT")
+                if areas["green"] > min_area:  send_line("KEEP LEFT")
 
-            # Lap counting via magenta
+            # Lap counting with guard
             in_start = areas["magenta"] > start_mag_area
-            if STATE == "RACE":
-                if in_start and not magenta_seen_last:
-                    laps_seen += 1
-                    if laps_seen >= 4:  # first pass after GO counts as 1
-                        STATE = "PARK"
-                        send_line("MODE PARK")
-                        hud.append("MODE → PARK")
+            if not in_start: left_start_zone = True
+            if STATE == "RACE" and left_start_zone and in_start and not magenta_seen_last:
+                laps_seen += 1
+                if laps_seen >= 3 and not NO_SERIAL:
+                    STATE = "PARK"
+                    park_t0 = time.time()
+                    send_line("MODE PARK")
             magenta_seen_last = in_start
 
-            # Line tracking
+            # Line tracking during RACE
             cx = track_line(frame_bgr, masks, LINE_MODE)
             offset_px = cx - center_x
             offset = max(-1.0, min(1.0, offset_px / (w/2.0)))
-
             near_pillar = (areas["red"] > near_area) or (areas["green"] > near_area)
             speed = 120 if near_pillar else 180
-
-            if STATE == "RACE":
+            if STATE == "RACE" and not NO_SERIAL:
                 send_line(f"DRIVE {offset:.3f} {int(speed)}")
-            else:
-                send_line("DRIVE 0.000 0")
-                now = time.time()
-                if now - last_hb > 0.2:
-                    send_line("HB", dedupe=False)
-                    last_hb = now
 
-            # Preview (only if not headless)
+            # PARK: parallel alignment only (no driving inside)
+            if STATE == "PARK":
+                steer, ang_err, lat = parking_steer(frame_bgr, masks)
+                if not NO_SERIAL:
+                    now = time.time()
+                    if park_t0 is None: park_t0 = now
+                    if (now - park_t0) < PARK_ALIGN_DURATION:
+                        send_line(f"DRIVE {steer:.3f} {int(PARK_SPEED)}")
+                    else:
+                        send_line("DRIVE 0.000 0")
+                else:
+                    # test-vision: show alignment numbers
+                    print(f"[PARK] steer={steer:+.3f} ang={ang_err:+.1f}° lat={lat:+.3f}")
+
+            # Heartbeat
+            now = time.time()
+            if (now - last_hb) > HB_PERIOD and not NO_SERIAL:
+                send_line("HB"); last_hb = now
+
+            # Optional preview
             if not HEADLESS:
                 if DEBUG_OVERLAY:
-                    cv2.putText(frame_bgr, f"STATE: {STATE}", (10, 22), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0,255,0), 2)
-                    cv2.putText(frame_bgr, f"offset: {offset:+.3f}", (10, 44), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0,255,0), 2)
-                    y = 66
-                    for line in hud[:4]:
-                        cv2.putText(frame_bgr, line, (10, y), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0,255,0), 2)
-                        y += 20
-                cv2.imshow("WRO FE – Vision", frame_bgr)
+                    cv2.putText(frame_bgr, f"STATE: {STATE}", (10, 22),
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0,255,0), 2)
+                cv2.imshow("WRO FE – Vision (Webcam)", frame_bgr)
                 if cv2.waitKey(1) & 0xFF == ord('q'):
                     break
 
     except KeyboardInterrupt:
-        print("\n[Pi] Ctrl-C received, shutting down…")
-
+        print("[Pi] Ctrl-C")
     finally:
-        try:
-            send_line("STOP", dedupe=False)
-        except Exception:
-            pass
-        try:
-            cam.stop()
-        except Exception:
-            pass
+        try: cap.release()
+        except Exception: pass
         if ser:
-            try:
-                ser.close()
-            except Exception:
-                pass
+            try: ser.close()
+            except Exception: pass
         if HAS_GPIO:
-            GPIO.cleanup()
+            try: GPIO.cleanup()
+            except Exception: pass
         if not HEADLESS:
-            cv2.destroyAllWindows()
+            try: cv2.destroyAllWindows()
+            except Exception: pass
         print("[Pi] Clean exit.")
 
-if __name__ == "__main__":
+if _name_ == "_main_":
     main()
 ```
 # 🏁 Arduino Code -  Obstacle Challenge
@@ -2195,25 +2159,20 @@ FULL CODE ( WITH TWEEKS) -
 /*
   WRO 2025 – Obstacle Challenge (Arduino)
   - Motors & steering on Arduino
-  - Six HC-SR04 ultrasonics for safety + full parking
-  - High-level hints from Raspberry Pi over Serial:
+  - Six HC-SR04 ultrasonics for safety + parking + 5s post-exit avoid
+  - High-level hints from Raspberry Pi over Serial (one-shot friendly):
       GO, MODE RACE|PARK, DRIVE <offset> <speed>, KEEP LEFT|RIGHT, HB, STOP
-
-  Hardware:
-    - Adafruit Motor Shield v1 (L293D), DC Motor on M1
-    - MG996R (or similar) steering servo on D9
-    - 6x HC-SR04: FC, FLD, FRD, L, R, B (see pin map)
+  Behavior:
+  - EXIT_PARK: NO REVERSING. Immediately pick freer side (L/R) and hold ±60° (TURN_HOLD_MS), then POST_EXIT_AVOID (5s OA) → RACE.
+  - RACE: Open-Challenge obstacle avoidance (repulsion fields). If a DRIVE arrived in the last 0.5 s, latch it and override OA briefly.
 */
 
-#include <Arduino.h>
 #include <Servo.h>
 #include <AFMotor.h>
-#include <string.h>
-#include <stdio.h>
 
 // ---------- Pin Map ----------
-#define TRIG_FC 2     // Front-Center TRIG
-#define ECHO_FC A0
+#define TRIG_FC 13    // Front-Center TRIG
+#define ECHO_FC A5    // Front-Center ECHO
 #define TRIG_FLD 3    // Front-Left Diag TRIG
 #define ECHO_FLD A1
 #define TRIG_FRD 5    // Front-Right Diag TRIG
@@ -2222,17 +2181,16 @@ FULL CODE ( WITH TWEEKS) -
 #define ECHO_L A3
 #define TRIG_R 10     // Right TRIG
 #define ECHO_R A4
-#define TRIG_B 13     // Back TRIG
-#define ECHO_B A5
-
+#define TRIG_B 2      // Back TRIG
+#define ECHO_B A0
 #define SERVO_PIN 9   // Steering servo (D9)
 
 // ---------- Hardware ----------
-AF_DCMotor motor(1);    // M1 on Adafruit Motor Shield v1
+AF_DCMotor motor(1);    // M1 on L293D shield v1
 Servo steering;
 
 // ---------- Tunables ----------
-const uint16_t ECHO_TIMEOUT_US   = 30000;  // ~5 m timeout
+const uint16_t ECHO_TIMEOUT_US   = 20000;  // ~5 m
 
 // Steering dynamics
 const int      MAX_STEER_DEG     = 60;
@@ -2240,16 +2198,16 @@ const float    KP_STEER          = 1.9f;
 const float    KD_STEER          = 0.25f;
 
 // Speed policy
-const int      BASE_SPEED        = 230;    // 0..255
-const int      MIN_SPEED         = 130;
-const int      REVERSE_SPEED     = 160;
-const int      CLEAR_FAST_CM     = 90;     // >= -> allow BASE_SPEED
-const int      CLEAR_SLOW_CM     = 20;     // <= -> clamp to MIN_SPEED
+const int      BASE_SPEED        = 230;    // normal speed (0..255)
+const int      MIN_SPEED         = 130;    // minimum forward speed when narrow
+const int      REVERSE_SPEED     = 160;    // reverse speed (used in safety routine)
+const int      CLEAR_FAST_CM     = 90;     // >= this ahead -> allow BASE_SPEED
+const int      CLEAR_SLOW_CM     = 20;     // <= this ahead -> clamp to MIN_SPEED
 
 // Stops & safety
-const int      FRONT_STOP_CM     = 15;
-const int      HARD_BLOCK_CM     = 14;
-const int      SIDE_PUSH_START   = 60;
+const int      FRONT_STOP_CM     = 15;     // stop/avoid if FC < 15 cm
+const int      HARD_BLOCK_CM     = 14;     // reverse failsafe threshold
+const int      SIDE_PUSH_START   = 60;     // start side repulsion within this range
 
 // Repulsion strengths
 const float    K_FRONT           = 1.9f;
@@ -2257,16 +2215,21 @@ const float    K_DIAG            = 1.7f;
 const float    K_SIDE            = 1.6f;
 const float    K_BACK            = 0.9f;
 
-// Filtering / loop timing
+// Smoothing
 const float    ALPHA_SMOOTH      = 0.20f;
 
-// Motor polarity helper
+// Optional: flip motor polarity without rewiring
 const bool     INVERT_MOTOR      = false;
 
 // ---------- Serial/Protocol ----------
-const unsigned long RX_WATCHDOG_MS = 400;   // stop if no recent RX
-const unsigned long HINT_BIAS_MS   = 450;   // KEEP side bias duration
-const int           SERBUF_LEN     = 64;
+const bool          REQUIRE_HEARTBEAT = false;   // set true to force stop if no serial
+const unsigned long RX_WATCHDOG_MS    = 400;     // used only if REQUIRE_HEARTBEAT==true
+const unsigned long HINT_BIAS_MS      = 450;     // KEEP LEFT/RIGHT bias duration
+const int           SERBUF_LEN        = 64;
+
+// ---------- One-shot latch (for DRIVE) ----------
+const unsigned long LATCH_MS = 500;      // latch DRIVE for 0.5 s
+unsigned long lastCmdMs = 0;             // millis of last DRIVE
 
 // ---------- State (smoothed distances) ----------
 float dFCf=200, dFLDf=200, dFRDf=200, dLf=200, dRf=200, dBf=200;
@@ -2274,11 +2237,11 @@ float dFCf=200, dFLDf=200, dFRDf=200, dLf=200, dRf=200, dBf=200;
 // PD steering memory
 float prevFy = 0.0f;
 
-// DRIVE hint from Pi
+// DRIVE hint from Pi (latched)
 float g_offset = 0.0f; // -1..+1
 int   g_speed  = 0;    // 0..255
 
-// Hint bias (KEEP LEFT/RIGHT): -1=left, +1=right, 0=none
+// Hint bias (KEEP LEFT/RIGHT): -1=left bias, +1=right bias, 0=none
 int   g_keepBias = 0;
 unsigned long g_keepBias_until = 0;
 
@@ -2287,25 +2250,84 @@ char lineBuf[SERBUF_LEN];
 int  lineLen = 0;
 unsigned long lastRxMs = 0;
 
-// Mode/State
-enum Mode { IDLE, RACE, PARK_ALIGN, PARK_ENTER, PARK_STRAIGHTEN, PARK_CENTER, PARK_HOLD, EMERGENCY_STOP };
+// ---------- Modes ----------
+enum Mode {
+  IDLE,
+  EXIT_PARK,          // NOW: decide side & hold ±60°, no reversing
+  RACE,
+  PARK_ALIGN,
+  PARK_ENTER,
+  PARK_STRAIGHTEN,
+  PARK_CENTER,
+  PARK_HOLD,
+  EMERGENCY_STOP,
+  POST_EXIT_AVOID     // 5s field-only avoidance before RACE
+};
 Mode mode = IDLE;
+
+// ----- Exit-Park parameters -----
+const unsigned long TURN_HOLD_MS    = 600;    // hold ±60° steering
+
+// EXIT_PARK substates
+enum ExitStage { EP_DECIDE_SIDE, EP_TURN_60, EP_DONE };
+ExitStage epStage = EP_DECIDE_SIDE;
+bool epPreferRight = true;
+unsigned long epStageStartMs = 0;
+
+// ----- Post-exit avoidance timing -----
+const unsigned long POST_EXIT_MS = 5000UL;
+unsigned long postExitStartMs = 0;
+
+// ---------- Motor stability layer ----------
+int currentMotorSpeed = 0;   // 0..255 absolute magnitude
+int currentMotorDir = 0;     // -1 = backward, 0 = stopped, +1 = forward
+
+void applyMotorHardware(int speed, int dir) {
+  if (speed <= 0 || dir == 0) {
+    motor.setSpeed(0);
+    motor.run(RELEASE);
+    currentMotorSpeed = 0;
+    currentMotorDir = 0;
+    return;
+  }
+  motor.setSpeed(constrain(speed, 0, 255));
+  if (INVERT_MOTOR) dir = -dir;
+  if (dir > 0) motor.run(FORWARD);
+  else motor.run(BACKWARD);
+  currentMotorSpeed = speed;
+  currentMotorDir = dir;
+}
+
+void setMotorState(int targetSpeedSigned) {
+  int targetDir = 0;
+  int targetSpeed = 0;
+  if (targetSpeedSigned > 0) { targetDir = +1; targetSpeed = targetSpeedSigned; }
+  else if (targetSpeedSigned < 0) { targetDir = -1; targetSpeed = -targetSpeedSigned; }
+  else { targetDir = 0; targetSpeed = 0; }
+  if (targetDir != currentMotorDir || targetSpeed != currentMotorSpeed) {
+    applyMotorHardware(targetSpeed, targetDir);
+  }
+}
+
+void driveForward_direct(uint8_t spd) { setMotorState(spd); }
+void driveBackward_direct(uint8_t spd) { setMotorState(-int(spd)); }
+void driveStop_direct() { setMotorState(0); }
 
 // ---------- Helpers ----------
 template<typename T>
-T clamp(T v, T lo, T hi) { return (v < lo) ? lo : (v > hi) ? hi : v; }
+T clampT(T v, T lo, T hi) { return (v < lo) ? lo : (v > hi) ? hi : v; }
+inline int   clampI(int v, int lo, int hi)       { return clampT<int>(v, lo, hi); }
+inline float clampF(float v, float lo, float hi) { return clampT<float>(v, lo, hi); }
 
 long readDistanceOnce(uint8_t trig, uint8_t echo) {
   pinMode(trig, OUTPUT);
   pinMode(echo, INPUT);
-
   digitalWrite(trig, LOW);  delayMicroseconds(2);
   digitalWrite(trig, HIGH); delayMicroseconds(10);
   digitalWrite(trig, LOW);
-
   unsigned long dur = pulseIn(echo, HIGH, ECHO_TIMEOUT_US);
-  if (dur == 0) return 400;       // treat as far (open space)
-  return (long)(dur / 58);        // microseconds -> cm
+  if (dur == 0) return 400;       // treat as far
+  return (long)(dur / 58);        // us -> cm
 }
 
 long readDistanceMedian3(uint8_t trig, uint8_t echo) {
@@ -2318,106 +2340,145 @@ long readDistanceMedian3(uint8_t trig, uint8_t echo) {
   return b;
 }
 
-// Microsecond-precision steering around center (1500us)
-void setSteerDeg(int delta) { // -MAX..+MAX relative to center
-  delta = clamp(delta, -MAX_STEER_DEG, MAX_STEER_DEG);
+// Microsecond-precision steering
+void setSteerDeg(int delta) {
+  delta = clampI(delta, -MAX_STEER_DEG, MAX_STEER_DEG);
   const int center_us = 1500;
-  const float us_per_deg = 11.0f;     // tune (10–12 typical)
+  const float us_per_deg = 11.0f;
   int pulse = center_us + (int)(delta * us_per_deg);
-  steering.writeMicroseconds(clamp(pulse, 1000, 2000));
+  steering.writeMicroseconds(clampI(pulse, 1000, 2000));
 }
 
-void driveForward(uint8_t spd) {
-  motor.setSpeed(spd);
-  if (INVERT_MOTOR) motor.run(BACKWARD);
-  else              motor.run(FORWARD);
-}
-
-void driveBackward(uint8_t spd) {
-  motor.setSpeed(spd);
-  if (INVERT_MOTOR) motor.run(FORWARD);
-  else              motor.run(BACKWARD);
-}
-
-void driveStop() {
-  motor.setSpeed(0);
-  motor.run(RELEASE);
-}
-
+// map speed by clearance
 int mapToSpeed(long clear_cm) {
   if (clear_cm <= CLEAR_SLOW_CM) return MIN_SPEED;
   if (clear_cm >= CLEAR_FAST_CM) return BASE_SPEED;
   float t = float(clear_cm - CLEAR_SLOW_CM) / float(CLEAR_FAST_CM - CLEAR_SLOW_CM);
   int spd = (int)(MIN_SPEED + t * (BASE_SPEED - MIN_SPEED));
-  return clamp(spd, MIN_SPEED, BASE_SPEED);
+  return clampI(spd, MIN_SPEED, BASE_SPEED);
 }
 
+// Compute repulsion magnitude
 float repulse(float d_cm, float range_cm, float k) {
   if (d_cm >= range_cm) return 0.0f;
   float s = 1.0f - (d_cm / range_cm);
   if (s < 0) s = 0;
-  return k * s; // smooth, bounded
+  return k * s;
 }
 
-// Stop → steer away → reverse → arc forward
+// Stop → steer away → avoidance maneuver (safety)
 void stopSteerAndAvoid(bool preferRight) {
-  driveStop();
+  driveStop_direct();
   setSteerDeg(preferRight ? +MAX_STEER_DEG : -MAX_STEER_DEG);
   delay(120);
-  driveBackward(REVERSE_SPEED);
+  driveBackward_direct(REVERSE_SPEED);
   delay(300);
-  driveForward(MIN_SPEED);
+  driveForward_direct(MIN_SPEED);
   delay(350);
   setSteerDeg(0);
 }
 
+// ---------- EXIT_PARK control (no reversing version) ----------
+void enterExitPark() {
+  mode = EXIT_PARK;
+  epStage = EP_DECIDE_SIDE;        // start by deciding side immediately
+  epStageStartMs = millis();
+  setSteerDeg(0);
+  driveStop_direct();
+}
+
+void runExitPark() {
+  switch (epStage) {
+    case EP_DECIDE_SIDE: {
+      // Choose side with more clearance immediately (no reversing)
+      epPreferRight = (dRf >= dLf);
+      epStage = EP_TURN_60;
+      epStageStartMs = millis();
+      break;
+    }
+
+    case EP_TURN_60: {
+      // Hold ±60° steering, motors stopped
+      setSteerDeg(epPreferRight ? +60 : -60);
+      driveStop_direct();
+      if (millis() - epStageStartMs >= TURN_HOLD_MS) {
+        setSteerDeg(0);
+        epStage = EP_DONE;
+      }
+      break;
+    }
+
+    case EP_DONE: {
+      // Enter 5s obstacle avoidance before RACE
+      setSteerDeg(0);
+      mode = POST_EXIT_AVOID;
+      postExitStartMs = millis();
+      break;
+    }
+  }
+}
+
 // ---------- Serial parsing ----------
 void handleLine(char *s) {
-  lastRxMs = millis();  // for watchdog
+  lastRxMs = millis();
 
-  // Trim CR/LF
   int n = 0;
   while (s[n]) n++;
   while (n > 0 && (s[n-1] == '\r' || s[n-1] == '\n' || s[n-1] == ' ')) { s[n-1] = 0; n--; }
   if (n == 0) return;
 
-  // Commands:
-  // GO | MODE RACE | MODE PARK | DRIVE <offset> <speed> | KEEP LEFT/RIGHT | HB | STOP
-  if (strcmp(s, "GO") == 0) {
-    // remain IDLE until MODE arrives
-    return;
-  }
+  if (strcmp(s, "GO") == 0) { return; }
 
   if (strncmp(s, "MODE ", 5) == 0) {
     char *arg = s + 5;
+
     if (strcmp(arg, "RACE") == 0) {
-      mode = RACE;
+      if (mode == IDLE || mode == PARK_ALIGN || mode == PARK_ENTER ||
+          mode == PARK_STRAIGHTEN || mode == PARK_CENTER || mode == PARK_HOLD ||
+          mode == EMERGENCY_STOP) {
+        enterExitPark();
+      } else {
+        mode = RACE;
+        setSteerDeg(0);
+      }
       g_keepBias = 0; g_keepBias_until = 0;
-      setSteerDeg(0);
-    } else if (strcmp(arg, "PARK") == 0) {
-      mode = PARK_ALIGN;
-      g_keepBias = 0; g_keepBias_until = 0;
+      return;
     }
-    return;
+
+    if (strcmp(arg, "PARK") == 0) {
+      g_keepBias = 0; g_keepBias_until = 0;
+      mode = PARK_ALIGN;
+      return;
+    }
   }
 
   if (strncmp(s, "DRIVE ", 6) == 0) {
-    // Example: DRIVE -0.18 180
     float o; int sp;
     if (sscanf(s + 6, "%f %d", &o, &sp) == 2) {
-      g_offset = clamp(o, -1.0f, 1.0f);
-      g_speed  = clamp(sp, 0, 255);
+      g_offset = clampF(o, -1.0f, 1.0f);
+      g_speed  = clampI(sp, 0, 255);
+      lastCmdMs = millis();                 // latch timestamp
     }
     return;
   }
 
-  if (strcmp(s, "KEEP LEFT") == 0)  { g_keepBias = -1; g_keepBias_until = millis() + HINT_BIAS_MS; return; }
-  if (strcmp(s, "KEEP RIGHT") == 0) { g_keepBias = +1; g_keepBias_until = millis() + HINT_BIAS_MS; return; }
+  if (strcmp(s, "KEEP LEFT") == 0) {
+    g_keepBias = -1; g_keepBias_until = millis() + HINT_BIAS_MS;
+    return;
+  }
+  if (strcmp(s, "KEEP RIGHT") == 0) {
+    g_keepBias = +1; g_keepBias_until = millis() + HINT_BIAS_MS;
+    return;
+  }
 
-  if (strcmp(s, "HB") == 0)   return;  // heartbeat
-  if (strcmp(s, "STOP") == 0) { mode = EMERGENCY_STOP; driveStop(); return; }
+  if (strcmp(s, "HB") == 0) { return; }
 
-  // Unknown commands ignored
+  if (strcmp(s, "STOP") == 0) {
+    mode = EMERGENCY_STOP;
+    driveStop_direct();
+    setSteerDeg(0);
+    return;
+  }
 }
 
 void pumpSerial() {
@@ -2428,28 +2489,32 @@ void pumpSerial() {
       handleLine(lineBuf);
       lineLen = 0;
     } else {
-      if (lineLen < SERBUF_LEN - 1) lineBuf[lineLen++] = c;
-      else lineLen = 0; // overflow -> reset
+      if (lineLen < SERBUF_LEN - 1) {
+        lineBuf[lineLen++] = c;
+      } else {
+        lineLen = 0;
+      }
     }
   }
 }
 
-// ---------- Parking helpers (ultrasonic-based) ----------
-// Sequence: ALIGN → ENTER → STRAIGHTEN → CENTER → HOLD
-
-const int ALIGN_TOL_CM       = 3;   // |L-R| <= -> parallel
+// ---------- Parking helpers (kept, unused unless you use PARK modes) ----------
+const int ALIGN_TOL_CM       = 3;   // |L-R| below this => parallel
 const int ALIGN_SPEED        = 120;
 
-const int ENTER_BACK_NEAR_CM = 22;  // trigger straighten
-const int ENTER_SIDE_NEAR_CM = 18;  // right side proximity during angle-in
+const int ENTER_BACK_NEAR_CM = 22;  // when back gets this close, start straighten
+const int ENTER_SIDE_NEAR_CM = 18;  // when right side close during angle-in
 
-const int STRAIGHT_TOL_CM    = 3;   // |L-R| small -> straight
-const int CENTER_FRONT_CM    = 18;  // target gaps (tune in venue)
+const int STRAIGHT_TOL_CM    = 3;   // |L-R| small again => straight
+const int CENTER_FRONT_CM    = 18;  // try to center between front/back ~ this
 const int CENTER_BACK_CM     = 18;
 
 unsigned long phaseStartMs = 0;
 
-void enterPhase(Mode m) { mode = m; phaseStartMs = millis(); }
+void enterPhase(Mode m) {
+  mode = m;
+  phaseStartMs = millis();
+}
 
 // ---------- Setup ----------
 void setup() {
@@ -2459,10 +2524,11 @@ void setup() {
   steering.attach(SERVO_PIN);
   setSteerDeg(0);
 
+  currentMotorSpeed = 0;
+  currentMotorDir = 0;
   motor.setSpeed(0);
   motor.run(RELEASE);
 
-  // Seed filters
   dFCf  = readDistanceMedian3(TRIG_FC,  ECHO_FC);
   dFLDf = readDistanceMedian3(TRIG_FLD, ECHO_FLD);
   dFRDf = readDistanceMedian3(TRIG_FRD, ECHO_FRD);
@@ -2470,19 +2536,21 @@ void setup() {
   dRf   = readDistanceMedian3(TRIG_R,   ECHO_R);
   dBf   = readDistanceMedian3(TRIG_B,   ECHO_B);
 
-  // Signal ready to Pi
   Serial.println("RDY");
   lastRxMs = millis();
 }
 
 // ---------- Main Loop ----------
 void loop() {
-  // 0) Serial & watchdog
+  // 0) Serial & optional watchdog
   pumpSerial();
-  if (mode != EMERGENCY_STOP) {
-    if (millis() - lastRxMs > RX_WATCHDOG_MS) {
-      driveStop();
-      setSteerDeg(0);
+
+  if (REQUIRE_HEARTBEAT) {
+    if (mode != EMERGENCY_STOP && !(mode == EXIT_PARK && epStage == EP_TURN_60)) {
+      if (millis() - lastRxMs > RX_WATCHDOG_MS) {
+        driveStop_direct();
+        setSteerDeg(0);
+      }
     }
   }
 
@@ -2501,8 +2569,8 @@ void loop() {
   dRf   = ALPHA_SMOOTH * dR   + (1 - ALPHA_SMOOTH) * dRf;
   dBf   = ALPHA_SMOOTH * dB   + (1 - ALPHA_SMOOTH) * dBf;
 
-  // 2) Global safety
-  if (mode != EMERGENCY_STOP) {
+  // 2) Global immediate safety — works in any mode (except during the brief turn)
+  if (!(mode == EXIT_PARK && epStage == EP_TURN_60) && mode != EMERGENCY_STOP) {
     if (dFCf < FRONT_STOP_CM) {
       bool freerRight = (dRf > dLf);
       stopSteerAndAvoid(freerRight);
@@ -2517,159 +2585,202 @@ void loop() {
     }
   }
 
-  // 3) Mode behavior
+  // 3) Mode behaviors
   switch (mode) {
     case IDLE: {
-      driveStop();
+      driveStop_direct();
       setSteerDeg(0);
       break;
     }
 
-    case RACE: {
-      // Potential fields from distances
-      float Fx = 0, Fy = 0;
-      float fFC  = repulse(dFCf,  CLEAR_FAST_CM, K_FRONT);
-      Fx += -fFC;
+    case EXIT_PARK: {
+      runExitPark();
+      break;
+    }
 
+    case POST_EXIT_AVOID: {
+      // Field-only obstacle avoidance for 5s (ignores Pi DRIVE offset)
+      float Fx = 0, Fy = 0;
+
+      float fFC  = repulse(dFCf,  CLEAR_FAST_CM, K_FRONT);   Fx += -fFC;
       float fFLD = repulse(dFLDf, CLEAR_FAST_CM, K_DIAG);
       float fFRD = repulse(dFRDf, CLEAR_FAST_CM, K_DIAG);
       const float c45 = 0.70710678f;
-      Fx += -fFLD * c45;   Fy += -fFLD * c45;   // from +45°
-      Fx += -fFRD * c45;   Fy += +fFRD * c45;   // from -45°
+      Fx += -fFLD * c45;   Fy += -fFLD * c45;
+      Fx += -fFRD * c45;   Fy += +fFRD * c45;
 
       float fL = repulse(dLf, SIDE_PUSH_START, K_SIDE);
-      float fR = repulse(dR,  SIDE_PUSH_START, K_SIDE);
+      float fR = repulse(dRf, SIDE_PUSH_START, K_SIDE);
+      Fy += -fL;  Fy += +fR;
+
+      float fB = repulse(dBf, SIDE_PUSH_START, K_BACK);      Fx += +fB;
+
+      float Fy_dot = Fy - prevFy;  prevFy = Fy;
+      float steer_from_fields = (KP_STEER * Fy * 30.0f) + (KD_STEER * Fy_dot * 30.0f);
+      int steerDeg = (int)clampF(steer_from_fields, -(float)MAX_STEER_DEG, (float)MAX_STEER_DEG);
+      setSteerDeg(steerDeg);
+
+      long diagAvg = (long)((dFLDf + dFRDf) * 0.5f);
+      long forwardClear = min((long)dFCf, diagAvg);
+      int spd = mapToSpeed(forwardClear);
+      if (Fx < -1.2f) spd = max(spd - 50, MIN_SPEED);
+
+      if (spd <= 0) driveStop_direct();
+      else driveForward_direct(spd);
+
+      // Seamless handoff to RACE
+      if (millis() - postExitStartMs >= POST_EXIT_MS) {
+        prevFy = 0.0f;      // avoid PD spike on the first RACE tick
+        mode = RACE;
+      }
+      break;
+    }
+
+    case RACE: {
+      // ---- Open-Challenge obstacle avoidance baseline ----
+      float Fx = 0, Fy = 0;
+      float fFC  = repulse(dFCf,  CLEAR_FAST_CM, K_FRONT);
+      Fx += -fFC;
+      float fFLD = repulse(dFLDf, CLEAR_FAST_CM, K_DIAG);
+      float fFRD = repulse(dFRDf, CLEAR_FAST_CM, K_DIAG);
+      const float c45 = 0.70710678f;
+      Fx += -fFLD * c45;   Fy += -fFLD * c45;
+      Fx += -fFRD * c45;   Fy += +fFRD * c45;
+      float fL = repulse(dLf, SIDE_PUSH_START, K_SIDE);
+      float fR = repulse(dRf, SIDE_PUSH_START, K_SIDE);
       Fy += -fL;
       Fy += +fR;
-
       float fB = repulse(dBf, SIDE_PUSH_START, K_BACK);
       Fx += +fB;
 
-      // PD on lateral field
       float Fy_dot = Fy - prevFy; prevFy = Fy;
+      float steer_from_fields = (KP_STEER * Fy * 30.0f) + (KD_STEER * Fy_dot * 30.0f);
+      int   steerDeg_OA = clampI((int)steer_from_fields, -MAX_STEER_DEG, MAX_STEER_DEG);
 
-      // Base steer from Pi lane offset
+      long diagAvg = (long)((dFLDf + dFRDf) * 0.5f);
+      long forwardClear = min((long)dFCf, diagAvg);
+      int spd_OA = mapToSpeed(forwardClear);
+      if (Fx < -1.2f) spd_OA = max(spd_OA - 50, MIN_SPEED);
+
+      // ---- Pi latch override (0.5 s after DRIVE) ----
+      bool latchActive = (millis() - lastCmdMs) <= LATCH_MS;
       float steer_from_offset = g_offset * MAX_STEER_DEG;
 
-      // Temporary KEEP bias
       int bias = 0;
       if (g_keepBias != 0 && (long)(millis() - g_keepBias_until) < 0) {
-        bias = (g_keepBias > 0) ? +8 : -8; // ±8°
+        bias = (g_keepBias > 0) ? +8 : -8;
       } else {
         g_keepBias = 0;
       }
 
-      float steer_from_fields = (KP_STEER * Fy * 30.0f) + (KD_STEER * Fy_dot * 30.0f);
-      int steerDeg = (int)clamp(steer_from_offset + steer_from_fields + bias,
-                                (float)-MAX_STEER_DEG, (float)MAX_STEER_DEG);
+      int steerDeg = steerDeg_OA;
+      int spd      = spd_OA;
+
+      if (latchActive) {
+        steerDeg = (int)clampF(steer_from_offset + (float)bias, -(float)MAX_STEER_DEG, (float)MAX_STEER_DEG);
+        spd      = clampI(g_speed, 0, 255);
+      } else {
+        steerDeg = clampI(steerDeg_OA + bias, -MAX_STEER_DEG, MAX_STEER_DEG);
+        // spd stays from OA
+      }
+
       setSteerDeg(steerDeg);
-
-      // Speed from Pi hint, limited by forward clearance
-      long diagAvg = (long)((dFLDf + dFRDf) * 0.5f);
-      long forwardClear = min((long)dFCf, diagAvg);
-      int spdClear = mapToSpeed(forwardClear);
-      int spd = clamp(g_speed, 0, 255);
-      spd = min(spd, spdClear);
-
-      if (Fx < -1.2f) spd = max(spd - 50, MIN_SPEED);  // strong pushback → slow a bit
-
-      if (spd <= 0) driveStop(); else driveForward(spd);
+      if (spd <= 0) driveStop_direct();
+      else          driveForward_direct(spd);
       break;
     }
 
     case PARK_ALIGN: {
-      // Equalize left/right to get parallel
-      int diff = (int)(dLf - dRf);            // +ve = too far from left wall
-      int sgn = (diff > 0) ? -1 : +1;         // steer toward nearer wall
-      int mag = min(12, max(4, abs(diff)));   // gentle
+      int diff = (int)(dLf - dRf);
+      int sgn = (diff > 0) ? -1 : +1;
+      int mag = min(12, max(4, abs(diff)));
       setSteerDeg(sgn * mag);
 
-      if (dFCf > 25) driveForward(ALIGN_SPEED);
-      else if (dBf > 25) driveBackward(ALIGN_SPEED - 10);
-      else driveStop();
+      int spd = ALIGN_SPEED;
+      if (dFCf > 25) driveForward_direct(spd);
+      else if (dBf > 25) driveBackward_direct(spd-10);
+      else driveStop_direct();
 
-      if (abs(diff) <= ALIGN_TOL_CM || (millis() - phaseStartMs > 5000UL)) {
-        driveStop(); setSteerDeg(0); enterPhase(PARK_ENTER);
+      if (abs(diff) <= ALIGN_TOL_CM) {
+        driveStop_direct();
+        setSteerDeg(0);
+        enterPhase(PARK_ENTER);
+      }
+
+      if (millis() - phaseStartMs > 5000UL) {
+        enterPhase(PARK_ENTER);
       }
       break;
     }
 
     case PARK_ENTER: {
-      // Angle-in with right lock until back/right get near
       setSteerDeg(+MAX_STEER_DEG);
       if (dBf > ENTER_BACK_NEAR_CM && dRf > ENTER_SIDE_NEAR_CM) {
-        driveBackward(REVERSE_SPEED);
+        driveBackward_direct(REVERSE_SPEED);
       } else {
-        driveStop(); enterPhase(PARK_STRAIGHTEN);
+        driveStop_direct();
+        enterPhase(PARK_STRAIGHTEN);
       }
-      if (millis() - phaseStartMs > 4000UL) enterPhase(PARK_STRAIGHTEN);
+      if (millis() - phaseStartMs > 4000UL) {
+        enterPhase(PARK_STRAIGHTEN);
+      }
       break;
     }
 
     case PARK_STRAIGHTEN: {
       setSteerDeg(-MAX_STEER_DEG);
-      if (dBf > 16) driveBackward(MIN_SPEED); else driveStop();
+      if (dBf > 16) driveBackward_direct(MIN_SPEED);
+      else driveStop_direct();
 
       int diff = (int)(dLf - dRf);
       if (abs(diff) <= STRAIGHT_TOL_CM || millis() - phaseStartMs > 2000UL) {
-        driveStop(); setSteerDeg(0); enterPhase(PARK_CENTER);
+        driveStop_direct();
+        setSteerDeg(0);
+        enterPhase(PARK_CENTER);
       }
       break;
     }
 
     case PARK_CENTER: {
-      // Center between front/back
       bool front_ok = (dFCf >= CENTER_FRONT_CM - 2) && (dFCf <= CENTER_FRONT_CM + 6);
       bool back_ok  = (dBf >= CENTER_BACK_CM - 2)  && (dBf <= CENTER_BACK_CM + 6);
 
       if (!front_ok && dFCf > CENTER_FRONT_CM + 6 && dFCf > 14) {
-        setSteerDeg(0); driveForward(MIN_SPEED);
+        setSteerDeg(0);
+        driveForward_direct(MIN_SPEED);
       } else if (!back_ok && dBf > CENTER_BACK_CM + 6 && dBf > 14) {
-        setSteerDeg(0); driveBackward(MIN_SPEED);
+        setSteerDeg(0);
+        driveBackward_direct(MIN_SPEED);
       } else {
-        driveStop();
+        driveStop_direct();
       }
 
-      if ((front_ok && back_ok) || (millis() - phaseStartMs > 3000UL)) {
+      if (front_ok && back_ok) {
+        enterPhase(PARK_HOLD);
+      }
+      if (millis() - phaseStartMs > 3000UL) {
         enterPhase(PARK_HOLD);
       }
       break;
     }
 
     case PARK_HOLD: {
-      driveStop();
+      driveStop_direct();
       setSteerDeg(0);
-      // Stay here; Pi will only send HB/STOP
       break;
     }
 
     case EMERGENCY_STOP: {
-      driveStop();
+      driveStop_direct();
       setSteerDeg(0);
       break;
     }
   }
 
-  // Smooth servo/motor update cadence
+  // Loop timing ~20ms for smooth servo updates
   delay(20);
-
-  // --- Optional debug prints ---
-  /*
-  static uint16_t dbgDiv = 0;
-  if ((dbgDiv++ % 20) == 0) {
-    Serial.print("MODE:"); Serial.print(mode);
-    Serial.print(" | FC:"); Serial.print(dFCf);
-    Serial.print(" FLD:"); Serial.print(dFLDf);
-    Serial.print(" FRD:"); Serial.print(dFRDf);
-    Serial.print(" L:"); Serial.print(dLf);
-    Serial.print(" R:"); Serial.print(dRf);
-    Serial.print(" B:"); Serial.print(dBf);
-    Serial.print(" | g_off:"); Serial.print(g_offset,3);
-    Serial.print(" g_spd:"); Serial.print(g_speed);
-    Serial.print(" bias:"); Serial.println(g_keepBias);
-  }
-  */
 }
+
 
 ```
 ```bash
