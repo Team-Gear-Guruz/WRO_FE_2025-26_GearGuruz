@@ -66,11 +66,12 @@ This repository contains engineering material of a self-driven vehicle's model p
 
 ## Team members
 
+Kushal Khemani (**TEAM LEADER**), age 16, kushal.khemani@gmail.com
+(Arduino Programming in C++, 3D Design and Manufacturing , Robot Assembly, PCB Designing and Soldering)
+
 Ayan Atmakuri, age 16, atmakuriayan@gmail.com 
 (Raspberry Pi Programming)
 
-Kushal Khemani, age 16, kushal.khemani@gmail.com
-(Arduino Programming, 3D Modeling, Building, PCB)
 
 ## Team Photos
 
