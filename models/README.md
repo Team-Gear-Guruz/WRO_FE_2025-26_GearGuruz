@@ -1,5 +1,6 @@
 
-## 3D Models Used
+## 3D Models Used 
+(Designed By Kushal)
 
 The design of the self-driving vehicle includes several custom-designed and 3D-printed components to ensure optimal component placement, secure mounting, ease of assembly, and overall mechanical stability. These models were designed using CAD tools (e.g., Creo or Fusion 360) with attention to chassis balance, sensor positioning, and modularity.
 
