@@ -1,4 +1,7 @@
 # Electromechanical Diagrams
+
+(Designed By Kushal)
+
 This folder documents the **wiring, control logic, and behavior** of our WRO Future Engineers vehicle.  
 The diagrams show how the **Raspberry Pi (vision + decision-making)**, **Arduino (actuator control)**, and **sensors/motors** all work together.  
 At a high level:
@@ -16,7 +19,7 @@ At a high level:
 | **Motor Driver (L293D / TB6612)**| Controls DC motor speed & direction                                  |
 | **DC Gear Motor + Servo**        | Provides rear drive + steering                                       |
 | **Ultrasonic Sensors (6x HC-SR04)** | Distance sensing: front, back, sides, diagonals                   |
-| **Li-Po Battery (3.7V, 2200mAh)**| Power source for electronics & motors                                |
+| **Li-ion Battery (11.1V 3000 mah)**| Power source for electronics & motors                                |
 
 ---
 
