@@ -67,16 +67,13 @@ This repository contains engineering material of a self-driven vehicle's model p
 ## Team members
 
 Kushal Khemani (**TEAM LEADER**), age 16, kushal.khemani@gmail.com
-(Arduino Programming in C++, 3D Design and Manufacturing , Robot Assembly, PCB Designing and Soldering, GITHUB Repository) - Basically Everything 
-
-Ayan Atmakuri, age 16, atmakuriayan@gmail.com
-
+(Arduino Programming in C++, 3D Design and Manufacturing , Robot Assembly, PCB Designing and Soldering, GITHUB Repository)
 
 ## Team Photos
 
-<img src="https://github.com/ayan-atm/WRO_FE_2025-26/raw/main/t-photos/Official%20Picture.jpeg" width="40%" height="40%"> <img src="https://github.com/ayan-atm/WRO_FE_2025-26/raw/main/t-photos/Funny%20Picture.png" width="40%" height="40%">
+<img src="https://github.com/ayan-atm/WRO_FE_2025-26/raw/main/t-photos/Official%20Picture.jpeg" width="40%" height="40%"> 
 
-Ayan Atmakuri (Purple shirt), Kushal Khemani (Grey shirt with green collar)
+Kushal Khemani (Grey shirt with green collar)
 
 ##  Quick Overview
 
