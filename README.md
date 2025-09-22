@@ -66,14 +66,10 @@ This repository contains engineering material of a self-driven vehicle's model p
 
 ## Team members
 
-Kushal Khemani (**TEAM LEADER**), age 16, kushal.khemani@gmail.com
-(Arduino Programming in C++, 3D Design and Manufacturing , Robot Assembly, PCB Designing and Soldering, GITHUB Repository)
+Kushal Khemani, age 16, kushal.khemani@gmail.com
 
 ## Team Photos
 
-<img src="https://github.com/ayan-atm/WRO_FE_2025-26/raw/main/t-photos/Official%20Picture.jpeg" width="40%" height="40%"> 
-
-Kushal Khemani (Grey shirt with green collar)
 
 ##  Quick Overview
 
@@ -1223,7 +1219,7 @@ _**NOTE**_ From Kushal Khemani - This robot was made in less than 3 weeks (due t
 
 # Getting Started
 
-Ayan and I ( Kushal Khemani) had absolutely no idea how to use a Raspberry Pi when we first started working with it. At the beginning, even basic tasks like flashing the OS onto an SD card or connecting it to a monitor felt overwhelming. To figure things out, we relied on a few YouTube tutorials that broke the process down step by step. Slowly, by following along with these resources, we gained confidence and were able to start experimenting with the Pi ourselves.
+I had absolutely no idea how to use a Raspberry Pi when we first started working with it. At the beginning, even basic tasks like flashing the OS onto an SD card or connecting it to a monitor felt overwhelming. To figuring things out, relying on a few YouTube tutorials that broke the process down step by step. Slowly, by following along with these resources, I gained confidence and were able to start experimenting with the Pi ourselves.
 
 **Helpful videos we used:**
 
@@ -1233,7 +1229,7 @@ Ayan and I ( Kushal Khemani) had absolutely no idea how to use a Raspberry Pi wh
 
 Since I had just moved houses and all my electronics were still at my old place, I had to figure out how to use the Raspberry Pi without a keyboard or monitor. I ended up setting it up for headless operation, which means accessing it remotely from my laptop over Wi-Fi. By enabling SSH and using a tool like PuTTY or the built-in terminal, I could control the Pi entirely from my computer. This allowed me to run commands, install software, and experiment with projects without needing the physical peripherals. It was a lifesaver while I waited to get my setup back from the old house.
 
-This is what we did - 
+This is what I did - 
 
 ### **Step 1: Download Raspberry Pi OS**
 
